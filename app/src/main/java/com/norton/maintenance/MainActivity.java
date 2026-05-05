@@ -6,8 +6,12 @@ import android.os.Bundle;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.RadioGroup;
 import android.widget.Spinner;
 import android.widget.Toast;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import com.google.firebase.firestore.FirebaseFirestore;
 import java.net.URLEncoder;
@@ -20,17 +24,32 @@ import java.util.Map;
 public class MainActivity extends AppCompatActivity {
 
     private MaintenanceManager maintenanceManager;
-    private Spinner flatSpinner, monthSpinner, expenseSpinner, paymentTypeSpinner, expensePaymentTypeSpinner;
-    private EditText payAmount, expAmount, phoneInput, signatureInput, expenseDateInput;
+    private Spinner flatSpinner, monthSpinner, expenseSpinner;
+    private RadioGroup paymentTypeRadioGroup, expensePaymentTypeRadioGroup;
+    private EditText payAmount, expAmount, phoneInput, expenseDateInput;
     private String[] flats = {"1A", "1B", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "12A", "14", "15", "16", "17A", "17B", "18A", "18B", "19", "20"};
     private java.util.Calendar expenseCalendar = java.util.Calendar.getInstance();
 
     private static final String PREFS_NAME = "NortonPrefs";
     private static final String KEY_DEFAULT_AMOUNT = "default_amount";
     private static final String KEY_DEFAULT_SIGNATURE = "default_signature";
+    private static final String KEY_BUILDING_NAME = "building_name";
+    private static final String KEY_FLAT_LIST = "flat_list";
+
+    private String buildingNameValue = "Norton Apartments";
+    private String flatListValue = "1A, 1B, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12A, 14, 15, 16, 17A, 17B, 18A, 18B, 19, 20";
 
     // Data mapping for WhatsApp
     private Map<String, String> flatContacts = new HashMap<>();
+
+    private final ActivityResultLauncher<String> csvPickerLauncher = registerForActivityResult(
+            new ActivityResultContracts.GetContent(),
+            uri -> {
+                if (uri != null) {
+                    importCsvFromUri(uri);
+                }
+            }
+    );
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -43,13 +62,12 @@ public class MainActivity extends AppCompatActivity {
         flatSpinner = findViewById(R.id.flatSpinner);
         monthSpinner = findViewById(R.id.monthSpinner);
         expenseSpinner = findViewById(R.id.expenseTypeSpinner);
-        expensePaymentTypeSpinner = findViewById(R.id.expensePaymentTypeSpinner);
-        paymentTypeSpinner = findViewById(R.id.paymentTypeSpinner);
+        paymentTypeRadioGroup = findViewById(R.id.paymentTypeRadioGroup);
+        expensePaymentTypeRadioGroup = findViewById(R.id.expensePaymentTypeRadioGroup);
         payAmount = findViewById(R.id.payAmount);
         expAmount = findViewById(R.id.expenseAmount);
         expenseDateInput = findViewById(R.id.expenseDate);
         phoneInput = findViewById(R.id.phoneInput);
-        signatureInput = findViewById(R.id.signatureInput);
 
         Button btnPay = findViewById(R.id.btnSavePayment);
         Button btnMultiPay = findViewById(R.id.btnMultiplePayments);
@@ -59,6 +77,9 @@ public class MainActivity extends AppCompatActivity {
         Button btnStatus = findViewById(R.id.btnViewStatus);
         Button btnShareSum = findViewById(R.id.btnShareSummary);
         Button btnParams = findViewById(R.id.btnParameters);
+        Button btnOpeningBal = findViewById(R.id.btnSetOpeningBalance);
+        Button btnImportCsv = findViewById(R.id.btnImportCsv);
+        Button btnGetTemplate = findViewById(R.id.btnGetCsvTemplate);
 
         setupSpinners();
         setupDatePicker();
@@ -73,11 +94,36 @@ public class MainActivity extends AppCompatActivity {
         btnStatus.setOnClickListener(v -> showPaymentStatus());
         btnShareSum.setOnClickListener(v -> shareSummaryToAdmin());
         btnParams.setOnClickListener(v -> showParametersDialog());
+        btnOpeningBal.setOnClickListener(v -> showOpeningBalanceDialog());
+        btnImportCsv.setOnClickListener(v -> csvPickerLauncher.launch("text/comma-separated-values|text/csv"));
+        btnGetTemplate.setOnClickListener(v -> getCsvTemplate());
 
         // Load Defaults
         android.content.SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         payAmount.setText(prefs.getString(KEY_DEFAULT_AMOUNT, "2000"));
-        signatureInput.setText(prefs.getString(KEY_DEFAULT_SIGNATURE, "S.Sankarasubramanian"));
+        buildingNameValue = prefs.getString(KEY_BUILDING_NAME, "Norton Apartments");
+        flatListValue = prefs.getString(KEY_FLAT_LIST, "1A, 1B, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12A, 14, 15, 16, 17A, 17B, 18A, 18B, 19, 20");
+
+        // Update UI with loaded building name
+        android.widget.TextView buildingTitle = findViewById(R.id.buildingNameText);
+        if (buildingTitle != null) buildingTitle.setText(buildingNameValue);
+
+        // Update flats array from prefs
+        updateFlatsArray(flatListValue);
+    }
+
+    private void updateFlatsArray(String list) {
+        if (list == null || list.isEmpty()) return;
+        String[] parts = list.split(",");
+        flats = new String[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            flats[i] = parts[i].trim();
+        }
+        // Refresh spinners if they exist
+        if (flatSpinner != null) {
+            ArrayAdapter<String> flatAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, flats);
+            flatSpinner.setAdapter(flatAdapter);
+        }
     }
 
     private void loadContacts() {
@@ -136,12 +182,6 @@ public class MainActivity extends AppCompatActivity {
         String[] expTypes = {"Watchman Salary", "Ravi Salary", "Kolam Salary", "TNEB", "Maintenance","Plumbing/Motor","Other","W Bonus","R bonus","K bonus","CCTV"};
         ArrayAdapter<String> expAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, expTypes);
         expenseSpinner.setAdapter(expAdapter);
-
-        // 4. Payment Types
-        String[] payTypes = {"Cash", "Gpay"};
-        ArrayAdapter<String> payAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, payTypes);
-        paymentTypeSpinner.setAdapter(payAdapter);
-        expensePaymentTypeSpinner.setAdapter(payAdapter);
     }
 
     private void setupDatePicker() {
@@ -162,10 +202,15 @@ public class MainActivity extends AppCompatActivity {
     private void savePaymentAction() {
         String flat = flatSpinner.getSelectedItem().toString();
         String month = monthSpinner.getSelectedItem().toString();
-        String payType = paymentTypeSpinner.getSelectedItem().toString();
+        
+        int selectedPayTypeId = paymentTypeRadioGroup.getCheckedRadioButtonId();
+        String payType = (selectedPayTypeId == R.id.radioPayGpay) ? "Gpay" : "Cash";
+        
         String amountStr = payAmount.getText().toString();
         String phone = phoneInput.getText().toString();
-        String signature = signatureInput.getText().toString();
+
+        android.content.SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        String signature = prefs.getString(KEY_DEFAULT_SIGNATURE, "S.Sankarasubramanian");
 
         if (amountStr.isEmpty()) {
             Toast.makeText(this, "Enter amount", Toast.LENGTH_SHORT).show();
@@ -178,10 +223,11 @@ public class MainActivity extends AppCompatActivity {
         }
 
         double amount = Double.parseDouble(amountStr);
-        MaintenanceRecord record = new MaintenanceRecord(flat, month, 2026, payType, amount, phone);
+        int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+        MaintenanceRecord record = new MaintenanceRecord(flat, month, currentYear, payType, amount, phone);
 
         // 1. Open WhatsApp PDF immediately
-        maintenanceManager.sendWhatsApp(this, phone, flat, amount, signature);
+        maintenanceManager.sendWhatsApp(this, phone, flat, amount, signature, buildingNameValue);
 
         // 2. Background database save
         maintenanceManager.savePayment(record);
@@ -196,10 +242,11 @@ public class MainActivity extends AppCompatActivity {
 
     private void showMultiplePaymentsDialog() {
         String selectedMonth = monthSpinner.getSelectedItem().toString();
+        int currentYear = Calendar.getInstance().get(Calendar.YEAR);
         android.content.SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         String defaultAmt = prefs.getString(KEY_DEFAULT_AMOUNT, "2000");
 
-        FirebaseFirestore.getInstance().collection("payments")
+        maintenanceManager.getDb().collection("payments")
             .whereEqualTo("month", selectedMonth)
             .get()
             .addOnSuccessListener(querySnapshot -> {
@@ -306,7 +353,7 @@ public class MainActivity extends AppCompatActivity {
                     .setTitle("Multiple Payments: " + selectedMonth)
                     .setView(scrollView)
                     .setPositiveButton("Save All", (dialog, which) -> {
-                        com.google.firebase.firestore.WriteBatch batch = FirebaseFirestore.getInstance().batch();
+                        com.google.firebase.firestore.WriteBatch batch = maintenanceManager.getDb().batch();
                         for (String flat : flats) {
                             boolean isPaid = paidRadios.get(flat).isChecked();
                             if (isPaid) {
@@ -321,8 +368,8 @@ public class MainActivity extends AppCompatActivity {
                                     }
                                 } else {
                                     String phone = flatContacts.getOrDefault(flat, "");
-                                    MaintenanceRecord record = new MaintenanceRecord(flat, selectedMonth, 2026, type, amt, phone);
-                                    batch.set(FirebaseFirestore.getInstance().collection("payments").document(), record);
+                                    MaintenanceRecord record = new MaintenanceRecord(flat, selectedMonth, currentYear, type, amt, phone);
+                                    batch.set(maintenanceManager.getDb().collection("payments").document(), record);
                                 }
                             } else {
                                 // If marked Unpaid, delete if existed
@@ -364,6 +411,24 @@ public class MainActivity extends AppCompatActivity {
         editSig.setText(prefs.getString(KEY_DEFAULT_SIGNATURE, "S.Sankarasubramanian"));
         layout.addView(editSig);
 
+        android.widget.TextView labelBuild = new android.widget.TextView(this);
+        labelBuild.setText("Building Name:");
+        labelBuild.setPadding(0, 30, 0, 0);
+        layout.addView(labelBuild);
+
+        android.widget.EditText editBuild = new android.widget.EditText(this);
+        editBuild.setText(prefs.getString(KEY_BUILDING_NAME, "Norton Apartments"));
+        layout.addView(editBuild);
+
+        android.widget.TextView labelFlats = new android.widget.TextView(this);
+        labelFlats.setText("Flat List (comma separated):");
+        labelFlats.setPadding(0, 30, 0, 0);
+        layout.addView(labelFlats);
+
+        android.widget.EditText editFlats = new android.widget.EditText(this);
+        editFlats.setText(prefs.getString(KEY_FLAT_LIST, "1A, 1B, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12A, 14, 15, 16, 17A, 17B, 18A, 18B, 19, 20"));
+        layout.addView(editFlats);
+
         new androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle("App Parameters")
             .setView(layout)
@@ -371,65 +436,222 @@ public class MainActivity extends AppCompatActivity {
                 android.content.SharedPreferences.Editor editor = prefs.edit();
                 String newAmt = editAmt.getText().toString();
                 String newSig = editSig.getText().toString();
+                String newBuild = editBuild.getText().toString();
+                String newFlats = editFlats.getText().toString();
+
                 editor.putString(KEY_DEFAULT_AMOUNT, newAmt);
                 editor.putString(KEY_DEFAULT_SIGNATURE, newSig);
+                editor.putString(KEY_BUILDING_NAME, newBuild);
+                editor.putString(KEY_FLAT_LIST, newFlats);
                 editor.apply();
                 
                 payAmount.setText(newAmt);
-                signatureInput.setText(newSig);
+                buildingNameValue = newBuild;
+                flatListValue = newFlats;
+
+                android.widget.TextView title = findViewById(R.id.buildingNameText);
+                if (title != null) title.setText(newBuild);
+                updateFlatsArray(newFlats);
+
                 Toast.makeText(this, "Settings Saved!", Toast.LENGTH_SHORT).show();
             })
             .setNegativeButton("Cancel", null)
             .show();
     }
 
-    private void shareSummaryToAdmin() {
+    private void getCsvTemplate() {
+        String template = "TYPE,ID/FLAT,MONTH,AMOUNT,PAY_TYPE,DATE\n" +
+                "PAYMENT,1A,January,2000,Cash,2025-01-01\n" +
+                "EXPENSE,Watchman,January,8000,Cash,2025-01-01\n" +
+                "OPENING,Cash,January,5000,Cash,\n" +
+                "OPENING,Account,January,15000,Gpay,";
+        maintenanceManager.shareCsv(this, "Norton_Template.csv", template);
+        Toast.makeText(this, "Sharing CSV Template...", Toast.LENGTH_SHORT).show();
+    }
+
+    private void importCsvFromUri(Uri uri) {
+        try {
+            java.io.InputStream inputStream = getContentResolver().openInputStream(uri);
+            if (inputStream == null) return;
+            java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(inputStream));
+            String line;
+            com.google.firebase.firestore.WriteBatch batch = maintenanceManager.getDb().batch();
+            int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+            int count = 0;
+
+            // Skip header
+            reader.readLine();
+
+            while ((line = reader.readLine()) != null) {
+                if (line.trim().isEmpty() || line.startsWith("-")) continue;
+                String[] parts = line.split(",", -1);
+                if (parts.length < 5) continue;
+
+                String type = parts[0].trim();
+                String id = parts[1].trim();
+                String month = parts[2].trim();
+                String amtStr = parts[3].trim();
+                String payType = parts[4].trim();
+
+                if (amtStr.isEmpty()) continue;
+                double amount = Double.parseDouble(amtStr);
+
+                if (type.equalsIgnoreCase("PAYMENT")) {
+                    MaintenanceRecord record = new MaintenanceRecord(id, month, currentYear, payType, amount, "");
+                    batch.set(maintenanceManager.getDb().collection("payments").document(), record);
+                } else if (type.equalsIgnoreCase("EXPENSE")) {
+                    Expense exp = new Expense(id, amount, payType, month, new java.util.Date(), "");
+                    batch.set(maintenanceManager.getDb().collection("expenses").document(), exp);
+                } else if (type.equalsIgnoreCase("OPENING")) {
+                    String docId = currentYear + "_" + month;
+                    Map<String, Object> data = new HashMap<>();
+                    if (id.equalsIgnoreCase("Cash")) data.put("cash", amount);
+                    else if (id.equalsIgnoreCase("Account")) data.put("account", amount);
+                    batch.set(maintenanceManager.getDb().collection("opening_balances").document(docId), data, com.google.firebase.firestore.SetOptions.merge());
+                }
+                count++;
+                
+                // Commit every 400 records (Firestore limit is 500)
+                if (count % 400 == 0) {
+                    batch.commit();
+                    batch = maintenanceManager.getDb().batch();
+                }
+            }
+            batch.commit().addOnSuccessListener(aVoid -> Toast.makeText(this, "Import Successful!", Toast.LENGTH_SHORT).show());
+            inputStream.close();
+        } catch (Exception e) {
+            Toast.makeText(this, "Import Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            e.printStackTrace();
+        }
+    }
+
+    private void showOpeningBalanceDialog() {
         String selectedMonth = monthSpinner.getSelectedItem().toString();
-        FirebaseFirestore.getInstance().collection("payments")
-            .whereEqualTo("month", selectedMonth)
+        int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+        String docId = currentYear + "_" + selectedMonth;
+
+        maintenanceManager.getDb().collection("opening_balances").document(docId).get()
+            .addOnSuccessListener(doc -> {
+                android.widget.LinearLayout layout = new android.widget.LinearLayout(this);
+                layout.setOrientation(android.widget.LinearLayout.VERTICAL);
+                layout.setPadding(50, 40, 50, 10);
+
+                android.widget.TextView labelCash = new android.widget.TextView(this);
+                labelCash.setText("Opening Cash (Carry from prev month):");
+                layout.addView(labelCash);
+
+                android.widget.EditText editCash = new android.widget.EditText(this);
+                editCash.setText(String.valueOf(doc.exists() ? doc.get("cash") : "0"));
+                editCash.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+                layout.addView(editCash);
+
+                android.widget.TextView labelAcc = new android.widget.TextView(this);
+                labelAcc.setText("Opening Account/Gpay Balance:");
+                labelAcc.setPadding(0, 30, 0, 0);
+                layout.addView(labelAcc);
+
+                android.widget.EditText editAcc = new android.widget.EditText(this);
+                editAcc.setText(String.valueOf(doc.exists() ? doc.get("account") : "0"));
+                editAcc.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+                layout.addView(editAcc);
+
+                new androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setTitle("Opening Balance: " + selectedMonth)
+                    .setView(layout)
+                    .setPositiveButton("Save", (d, w) -> {
+                        Map<String, Object> data = new HashMap<>();
+                        data.put("cash", Double.parseDouble(editCash.getText().toString()));
+                        data.put("account", Double.parseDouble(editAcc.getText().toString()));
+                        maintenanceManager.getDb().collection("opening_balances").document(docId).set(data)
+                            .addOnSuccessListener(aVoid -> Toast.makeText(this, "Balance Saved!", Toast.LENGTH_SHORT).show());
+                    })
+                    .setNegativeButton("Cancel", null)
+                    .show();
+            });
+    }
+
+    private void shareSummaryToAdmin() {
+        int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+        
+        // 1. Fetch ALL Payments for the year
+        maintenanceManager.getDb().collection("payments")
+            .whereEqualTo("year", currentYear)
             .get()
             .addOnSuccessListener(pSnapshot -> {
-                double[] totalPaidArr = {0};
-                java.util.List<String> paidList = new java.util.ArrayList<>();
-                for (com.google.firebase.firestore.DocumentSnapshot doc : pSnapshot.getDocuments()) {
-                    String f = doc.getString("flatNo");
-                    if (f != null) paidList.add(f);
-                    Double amt = doc.getDouble("amount");
-                    if (amt != null) totalPaidArr[0] += amt;
-                }
-
-                StringBuilder pending = new StringBuilder();
-                for (String f : flats) {
-                    if (!paidList.contains(f)) pending.append(f).append(", ");
-                }
-
-                FirebaseFirestore.getInstance().collection("expenses")
-                    .whereEqualTo("month", selectedMonth)
+                // 2. Fetch ALL Expenses for the year
+                maintenanceManager.getDb().collection("expenses")
                     .get()
                     .addOnSuccessListener(eSnapshot -> {
-                        double[] totalExpArr = {0};
-                        for (com.google.firebase.firestore.DocumentSnapshot doc : eSnapshot.getDocuments()) {
-                            Double amt = doc.getDouble("amount");
-                            if (amt != null) totalExpArr[0] += amt;
-                        }
+                        // 3. Fetch ALL Opening Balances
+                        maintenanceManager.getDb().collection("opening_balances")
+                            .get()
+                            .addOnSuccessListener(bSnapshot -> {
+                                StringBuilder csv = new StringBuilder("TYPE,ID/FLAT,MONTH,AMOUNT,PAY_TYPE,DATE\n");
+                                
+                                // Map balances for easy lookup
+                                Map<String, com.google.firebase.firestore.DocumentSnapshot> balances = new HashMap<>();
+                                for(com.google.firebase.firestore.DocumentSnapshot doc : bSnapshot.getDocuments()) {
+                                    balances.put(doc.getId(), doc);
+                                }
 
-                        String summary = "Norton Maintenance Summary [" + selectedMonth + "]\n" +
-                                "---------------------------\n" +
-                                "Flats Paid: " + paidList.size() + " / " + flats.length + "\n" +
-                                "Collected: ₹" + (int) totalPaidArr[0] + "\n" +
-                                "Expenses: ₹" + (int) totalExpArr[0] + "\n" +
-                                "---------------------------\n" +
-                                "Pending: " + pending.toString() + "\n" +
-                                "---------------------------";
-                        
-                        maintenanceManager.sendTextWhatsApp(this, "9962446732", summary);
+                                String[] monthsList = {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
+                                
+                                for (String m : monthsList) {
+                                    String balId = currentYear + "_" + m;
+                                    boolean hasData = false;
+                                    
+                                    // Check if this month has any data
+                                    List<com.google.firebase.firestore.DocumentSnapshot> monthPayments = new ArrayList<>();
+                                    for(com.google.firebase.firestore.DocumentSnapshot d : pSnapshot.getDocuments()) {
+                                        if (m.equals(d.getString("month"))) monthPayments.add(d);
+                                    }
+                                    
+                                    List<com.google.firebase.firestore.DocumentSnapshot> monthExpenses = new ArrayList<>();
+                                    for(com.google.firebase.firestore.DocumentSnapshot d : eSnapshot.getDocuments()) {
+                                        if (m.equals(d.getString("month"))) monthExpenses.add(d);
+                                    }
+
+                                    if (monthPayments.isEmpty() && monthExpenses.isEmpty() && !balances.containsKey(balId)) continue;
+
+                                    csv.append("--- ").append(m.toUpperCase()).append(" ---,,,,,\n");
+                                    
+                                    // Add Opening
+                                    if (balances.containsKey(balId)) {
+                                        com.google.firebase.firestore.DocumentSnapshot b = balances.get(balId);
+                                        csv.append("OPENING,Cash,,").append(b.get("cash")).append(",Cash,\n");
+                                        csv.append("OPENING,Account,,").append(b.get("account")).append(",Gpay,\n");
+                                    }
+
+                                    // Add Payments
+                                    for (com.google.firebase.firestore.DocumentSnapshot d : monthPayments) {
+                                        csv.append("PAYMENT,").append(d.getString("flatNo")).append(",")
+                                           .append(m).append(",")
+                                           .append(d.get("amount")).append(",")
+                                           .append(d.getString("paymentType")).append(",")
+                                           .append(d.get("date")).append("\n");
+                                    }
+
+                                    // Add Expenses
+                                    for (com.google.firebase.firestore.DocumentSnapshot d : monthExpenses) {
+                                        csv.append("EXPENSE,").append(d.getString("type")).append(",")
+                                           .append(m).append(",")
+                                           .append(d.get("amount")).append(",")
+                                           .append(d.getString("paymentType")).append(",")
+                                           .append(d.get("date")).append("\n");
+                                    }
+                                    csv.append(",,,,,\n");
+                                }
+
+                                maintenanceManager.shareCsv(this, "Full_Accounts_" + currentYear + ".csv", csv.toString(), "9962446732");
+                                Toast.makeText(this, "Generating Full History CSV...", Toast.LENGTH_SHORT).show();
+                            });
                     });
             });
     }
 
     private void viewExpensesAction() {
         String selectedMonth = monthSpinner.getSelectedItem().toString();
-        FirebaseFirestore.getInstance().collection("expenses")
+        maintenanceManager.getDb().collection("expenses")
             .whereEqualTo("month", selectedMonth)
             .get()
             .addOnSuccessListener(querySnapshot -> {
@@ -438,7 +660,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void viewPaymentsAction(String month) {
-        FirebaseFirestore.getInstance().collection("payments")
+        maintenanceManager.getDb().collection("payments")
             .whereEqualTo("month", month)
             .get()
             .addOnSuccessListener(querySnapshot -> {
@@ -457,16 +679,20 @@ public class MainActivity extends AppCompatActivity {
         List<String> docsToDelete = new ArrayList<>();
 
         for (com.google.firebase.firestore.DocumentSnapshot doc : documents) {
-            String labelText = collection.equals("payments") ? "Flat " + doc.getString("flatNo") : doc.getString("type");
+            String name = collection.equals("payments") ? "Flat " + doc.getString("flatNo") : doc.getString("type");
+            String payType = doc.getString("paymentType");
+            if (payType == null) payType = "Cash"; // Default for old records
+            String labelText = name + "\n[" + payType + "]";
             
             android.widget.LinearLayout row = new android.widget.LinearLayout(this);
             row.setOrientation(android.widget.LinearLayout.HORIZONTAL);
             row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-            row.setPadding(0, 10, 0, 10);
+            row.setPadding(0, 15, 0, 15);
 
             android.widget.TextView label = new android.widget.TextView(this);
             label.setText(labelText);
-            label.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, -2, 1f));
+            label.setTextSize(14);
+            label.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, -2, 1.2f));
             row.addView(label);
 
             android.widget.EditText amountEdit = new android.widget.EditText(this);
@@ -492,11 +718,11 @@ public class MainActivity extends AppCompatActivity {
             .setTitle(title)
             .setView(scrollView)
             .setPositiveButton("Save All", (dialog, which) -> {
-                com.google.firebase.firestore.WriteBatch batch = FirebaseFirestore.getInstance().batch();
+                com.google.firebase.firestore.WriteBatch batch = maintenanceManager.getDb().batch();
                 
                 // 1. Process Deletions
                 for (String id : docsToDelete) {
-                    batch.delete(FirebaseFirestore.getInstance().collection(collection).document(id));
+                    batch.delete(maintenanceManager.getDb().collection(collection).document(id));
                 }
 
                 // 2. Process Updates
@@ -504,7 +730,7 @@ public class MainActivity extends AppCompatActivity {
                     if (!docsToDelete.contains(entry.getKey())) {
                         try {
                             double newAmt = Double.parseDouble(entry.getKey().startsWith("temp") ? "0" : entry.getValue().getText().toString());
-                            batch.update(FirebaseFirestore.getInstance().collection(collection).document(entry.getKey()), "amount", newAmt);
+                            batch.update(maintenanceManager.getDb().collection(collection).document(entry.getKey()), "amount", newAmt);
                         } catch (Exception e) {}
                     }
                 }
@@ -517,38 +743,76 @@ public class MainActivity extends AppCompatActivity {
 
     private void exportMonthlyData() {
         String selectedMonth = monthSpinner.getSelectedItem().toString();
-        
-        // 1. Fetch Payments
-        FirebaseFirestore.getInstance().collection("payments")
-            .whereEqualTo("month", selectedMonth)
-            .get()
-            .addOnSuccessListener(pSnapshot -> {
-                // 2. Fetch Expenses for the same month
-                FirebaseFirestore.getInstance().collection("expenses")
+        int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+        String balDocId = currentYear + "_" + selectedMonth;
+
+        // 1. Fetch Opening Balances
+        maintenanceManager.getDb().collection("opening_balances").document(balDocId).get()
+            .addOnSuccessListener(balDoc -> {
+                double openingCash = balDoc.exists() ? (balDoc.getDouble("cash") != null ? balDoc.getDouble("cash") : 0) : 0;
+                double openingGpay = balDoc.exists() ? (balDoc.getDouble("account") != null ? balDoc.getDouble("account") : 0) : 0;
+
+                // 2. Fetch Payments
+                maintenanceManager.getDb().collection("payments")
                     .whereEqualTo("month", selectedMonth)
                     .get()
-                    .addOnSuccessListener(eSnapshot -> {
-                        StringBuilder csv = new StringBuilder("TYPE,ID/FLAT,MONTH,AMOUNT,PAY_TYPE,DATE\n");
-                        
-                        // Add Payments
-                        for (com.google.firebase.firestore.DocumentSnapshot doc : pSnapshot.getDocuments()) {
-                            csv.append("PAYMENT,").append(doc.getString("flatNo")).append(",")
-                               .append(doc.getString("month")).append(",")
-                               .append(doc.get("amount")).append(",")
-                               .append(doc.getString("paymentType")).append(",")
-                               .append(doc.get("date")).append("\n");
-                        }
-                        
-                        // Add Expenses
-                        for (com.google.firebase.firestore.DocumentSnapshot doc : eSnapshot.getDocuments()) {
-                            csv.append("EXPENSE,").append(doc.getString("type")).append(",")
-                               .append(doc.getString("month")).append(",")
-                               .append(doc.get("amount")).append(",")
-                               .append(doc.getString("paymentType")).append(",")
-                               .append(doc.get("date")).append("\n");
-                        }
-                        
-                        maintenanceManager.shareCsv(this, "Accounts_" + selectedMonth + ".csv", csv.toString());
+                    .addOnSuccessListener(pSnapshot -> {
+                        // 3. Fetch Expenses
+                        maintenanceManager.getDb().collection("expenses")
+                            .whereEqualTo("month", selectedMonth)
+                            .get()
+                            .addOnSuccessListener(eSnapshot -> {
+                                StringBuilder csv = new StringBuilder("TYPE,ID/FLAT,MONTH,AMOUNT,PAY_TYPE,DATE\n");
+                                
+                                // Add Opening Balance Rows
+                                csv.append("OPENING,Cash,,").append(openingCash).append(",Cash,\n");
+                                csv.append("OPENING,Account,,").append(openingGpay).append(",Gpay,\n");
+                                csv.append(",,,,,\n"); // Empty row separator
+
+                                double totalCashPaid = 0;
+                                double totalGpayPaid = 0;
+                                double totalCashExp = 0;
+                                double totalGpayExp = 0;
+
+                                // Add Payments
+                                for (com.google.firebase.firestore.DocumentSnapshot doc : pSnapshot.getDocuments()) {
+                                    Double amt = doc.getDouble("amount");
+                                    String type = doc.getString("paymentType");
+                                    if (amt != null) {
+                                        if ("Gpay".equals(type)) totalGpayPaid += amt; else totalCashPaid += amt;
+                                    }
+                                    csv.append("PAYMENT,").append(doc.getString("flatNo")).append(",")
+                                       .append(doc.getString("month")).append(",")
+                                       .append(amt).append(",")
+                                       .append(type != null ? type : "Cash").append(",")
+                                       .append(doc.get("date")).append("\n");
+                                }
+
+                                // Add Expenses
+                                for (com.google.firebase.firestore.DocumentSnapshot doc : eSnapshot.getDocuments()) {
+                                    Double amt = doc.getDouble("amount");
+                                    String type = doc.getString("paymentType");
+                                    if (amt != null) {
+                                        if ("Gpay".equals(type)) totalGpayExp += amt; else totalCashExp += amt;
+                                    }
+                                    csv.append("EXPENSE,").append(doc.getString("type")).append(",")
+                                       .append(doc.getString("month")).append(",")
+                                       .append(amt).append(",")
+                                       .append(type != null ? type : "Cash").append(",")
+                                       .append(doc.get("date")).append("\n");
+                                }
+
+                                // Calculate Closings
+                                double netCash = openingCash + totalCashPaid - totalCashExp;
+                                double netGpay = openingGpay + totalGpayPaid - totalGpayExp;
+
+                                csv.append(",,,,,\n"); // Separator
+                                csv.append("CLOSING,Cash,,").append(netCash).append(",Cash,\n");
+                                csv.append("CLOSING,Account,,").append(netGpay).append(",Gpay,\n");
+                                csv.append("TOTAL,Net,,").append(netCash + netGpay).append(",,\n");
+                                
+                                maintenanceManager.shareCsv(this, "Accounts_" + selectedMonth + ".csv", csv.toString());
+                            });
                     });
             });
     }
@@ -627,55 +891,92 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateStatusText(String month, android.widget.TextView statusView) {
-        FirebaseFirestore.getInstance().collection("payments")
+        int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+        String balDocId = currentYear + "_" + month;
+
+        maintenanceManager.getDb().collection("opening_balances").document(balDocId).get()
+            .addOnSuccessListener(balDoc -> {
+                double openingCash = balDoc.exists() ? (balDoc.getDouble("cash") != null ? balDoc.getDouble("cash") : 0) : 0;
+                double openingGpay = balDoc.exists() ? (balDoc.getDouble("account") != null ? balDoc.getDouble("account") : 0) : 0;
+
+                maintenanceManager.getDb().collection("payments")
                 .whereEqualTo("month", month)
                 .get()
                 .addOnSuccessListener(querySnapshot -> {
-                    double[] totalPaidArr = {0};
-                    java.util.List<String> paidFlats = new java.util.ArrayList<>();
+                    double totalPaidSumStatus = 0;
+                    double totalCashPaid = 0;
+                    double totalGpayPaid = 0;
+                    java.util.Map<String, String> paidFlatTypes = new java.util.HashMap<>();
                     for (com.google.firebase.firestore.DocumentSnapshot doc : querySnapshot.getDocuments()) {
                         String f = doc.getString("flatNo");
-                        if (f != null) paidFlats.add(f);
+                        String type = doc.getString("paymentType");
+                        if (f != null) paidFlatTypes.put(f, type != null ? type : "Cash");
+                        
                         Double amt = doc.getDouble("amount");
-                        if (amt != null) totalPaidArr[0] += amt;
+                        if (amt != null) {
+                            totalPaidSumStatus += amt;
+                            if ("Gpay".equals(type)) totalGpayPaid += amt;
+                            else totalCashPaid += amt;
+                        }
                     }
 
-                    StringBuilder pending = new StringBuilder("Pending (" + (flats.length - paidFlats.size()) + "):\n");
-                    StringBuilder paidStr = new StringBuilder("Paid (" + paidFlats.size() + "):\n");
+                    StringBuilder pending = new StringBuilder("Pending (" + (flats.length - paidFlatTypes.size()) + "):\n");
+                    StringBuilder paidStr = new StringBuilder("Paid (" + paidFlatTypes.size() + "):\n");
 
                     for (String f : flats) {
-                        if (paidFlats.contains(f)) {
-                            paidStr.append(f).append(", ");
+                        if (paidFlatTypes.containsKey(f)) {
+                            paidStr.append(f).append(" (").append(paidFlatTypes.get(f)).append("), ");
                         } else {
                             pending.append(f).append(", ");
                         }
                     }
 
-                    FirebaseFirestore.getInstance().collection("expenses")
+                    final double finalTotalPaid = totalPaidSumStatus;
+                    final double finalCashPaid = totalCashPaid;
+                    final double finalGpayPaid = totalGpayPaid;
+
+                    maintenanceManager.getDb().collection("expenses")
                             .whereEqualTo("month", month)
                             .get()
                             .addOnSuccessListener(eSnapshot -> {
-                                double[] totalExpArr = {0};
+                                double totalExp = 0;
+                                double totalCashExp = 0;
+                                double totalGpayExp = 0;
                                 for (com.google.firebase.firestore.DocumentSnapshot doc : eSnapshot.getDocuments()) {
                                     Double amt = doc.getDouble("amount");
-                                    if (amt != null) totalExpArr[0] += amt;
+                                    if (amt != null) {
+                                        totalExp += amt;
+                                        String type = doc.getString("paymentType");
+                                        if ("Gpay".equals(type)) totalGpayExp += amt;
+                                        else totalCashExp += amt;
+                                    }
                                 }
 
+                                double netCash = openingCash + finalCashPaid - totalCashExp;
+                                double netGpay = openingGpay + finalGpayPaid - totalGpayExp;
+
                                 String statusText = "Summary for " + month + ":\n" +
-                                        "Collected: ₹" + (int) totalPaidArr[0] + "\n" +
-                                        "Expenses: ₹" + (int) totalExpArr[0] + "\n" +
-                                        "Balance: ₹" + (int) (totalPaidArr[0] - totalExpArr[0]) + "\n\n" +
+                                        "Opening: Cash ₹" + (int)openingCash + ", Acc ₹" + (int)openingGpay + "\n" +
+                                        "Collected: ₹" + (int) finalTotalPaid + " (Cash: " + (int)finalCashPaid + ", Gpay: " + (int)finalGpayPaid + ")\n" +
+                                        "Expenses:  ₹" + (int) totalExp + " (Cash: " + (int)totalCashExp + ", Gpay: " + (int)totalGpayExp + ")\n" +
+                                        "---------------------------\n" +
+                                        "CLOSING: Cash ₹" + (int)netCash + ", Acc ₹" + (int)netGpay + "\n" +
+                                        "TOTAL BALANCE: ₹" + (int)(netCash + netGpay) + "\n\n" +
                                         paidStr.toString() + "\n\n" +
                                         pending.toString();
 
                                 statusView.setText(statusText);
                             });
                 });
+            });
     }
 
     private void saveExpenseAction() {
         String type = expenseSpinner.getSelectedItem().toString();
-        String payType = expensePaymentTypeSpinner.getSelectedItem().toString();
+        
+        int selectedExpPayTypeId = expensePaymentTypeRadioGroup.getCheckedRadioButtonId();
+        String payType = (selectedExpPayTypeId == R.id.radioExpGpay) ? "Gpay" : "Cash";
+
         String amountStr = expAmount.getText().toString();
         String selectedMonth = monthSpinner.getSelectedItem().toString();
 

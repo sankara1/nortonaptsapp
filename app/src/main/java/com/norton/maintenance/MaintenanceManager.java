@@ -25,7 +25,12 @@ public class MaintenanceManager {
     private final FirebaseFirestore db;
 
     public MaintenanceManager() {
-        this.db = FirebaseFirestore.getInstance();
+        String databaseId = "ai-studio-d6118695-2420-491c-b526-71bb953d4e66";
+        this.db = FirebaseFirestore.getInstance(databaseId);
+    }
+
+    public FirebaseFirestore getDb() {
+        return db;
     }
 
     public Task<DocumentReference> savePayment(MaintenanceRecord record) {
@@ -46,9 +51,9 @@ public class MaintenanceManager {
         return db.collection("contacts").get();
     }
 
-    public void sendWhatsApp(Context context, String phone, String flatNo, double amount, String signature) {
+    public void sendWhatsApp(Context context, String phone, String flatNo, double amount, String signature, String buildingName) {
         // Create PDF
-        File pdfFile = createPdf(context, flatNo, amount, signature);
+        File pdfFile = createPdf(context, flatNo, amount, signature, buildingName);
         if (pdfFile == null) {
             return;
         }
@@ -72,6 +77,10 @@ public class MaintenanceManager {
     }
 
     public void shareCsv(Context context, String filename, String content) {
+        shareCsv(context, filename, content, null);
+    }
+
+    public void shareCsv(Context context, String filename, String content, String phone) {
         File file = new File(context.getCacheDir(), filename);
         try (FileOutputStream out = new FileOutputStream(file)) {
             out.write(content.getBytes());
@@ -80,6 +89,9 @@ public class MaintenanceManager {
             Intent intent = new Intent(Intent.ACTION_SEND);
             intent.setType("text/csv");
             intent.putExtra(Intent.EXTRA_STREAM, uri);
+            if (phone != null && !phone.isEmpty()) {
+                intent.putExtra("jid", cleanPhone(phone) + "@s.whatsapp.net");
+            }
             intent.setPackage("com.whatsapp");
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             context.startActivity(intent);
@@ -100,7 +112,7 @@ public class MaintenanceManager {
         }
     }
 
-    private File createPdf(Context context, String flatNo, double amount, String signature) {
+    private File createPdf(Context context, String flatNo, double amount, String signature, String buildingName) {
         PdfDocument document = new PdfDocument();
         PdfDocument.PageInfo pageInfo = new PdfDocument.PageInfo.Builder(300, 450, 1).create();
         PdfDocument.Page page = document.startPage(pageInfo);
@@ -110,7 +122,7 @@ public class MaintenanceManager {
         
         paint.setTextSize(16f);
         paint.setFakeBoldText(true);
-        canvas.drawText("NORTON APARTMENTS", 50, 50, paint);
+        canvas.drawText(buildingName.toUpperCase(), 50, 50, paint);
         
         paint.setFakeBoldText(false);
         paint.setTextSize(12f);
