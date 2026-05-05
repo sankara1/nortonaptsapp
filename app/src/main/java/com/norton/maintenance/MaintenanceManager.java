@@ -33,8 +33,9 @@ public class MaintenanceManager {
         return db;
     }
 
-    public Task<DocumentReference> savePayment(MaintenanceRecord record) {
-        return db.collection("payments").add(record);
+    public Task<Void> savePayment(MaintenanceRecord record) {
+        String docId = record.flatNo + "_" + record.month + "_" + record.year;
+        return db.collection("payments").document(docId).set(record);
     }
 
     public Task<DocumentReference> saveExpense(Expense expense) {
@@ -51,9 +52,9 @@ public class MaintenanceManager {
         return db.collection("contacts").get();
     }
 
-    public void sendWhatsApp(Context context, String phone, String flatNo, double amount, String signature, String buildingName) {
+    public void sendWhatsApp(Context context, String phone, String flatNo, double amount, String signature, String buildingName, String month, int year) {
         // Create PDF
-        File pdfFile = createPdf(context, flatNo, amount, signature, buildingName);
+        File pdfFile = createPdf(context, flatNo, amount, signature, buildingName, month, year);
         if (pdfFile == null) {
             return;
         }
@@ -112,7 +113,7 @@ public class MaintenanceManager {
         }
     }
 
-    private File createPdf(Context context, String flatNo, double amount, String signature, String buildingName) {
+    private File createPdf(Context context, String flatNo, double amount, String signature, String buildingName, String month, int year) {
         PdfDocument document = new PdfDocument();
         PdfDocument.PageInfo pageInfo = new PdfDocument.PageInfo.Builder(300, 450, 1).create();
         PdfDocument.Page page = document.startPage(pageInfo);
@@ -129,8 +130,10 @@ public class MaintenanceManager {
         canvas.drawText("Maintenance Receipt", 50, 80, paint);
         canvas.drawText("-----------------------------------", 50, 100, paint);
         canvas.drawText("Flat No: " + flatNo, 50, 130, paint);
-        canvas.drawText("Amount Paid: ₹" + (int)amount, 50, 160, paint);
-        canvas.drawText("Date: " + java.text.DateFormat.getDateInstance().format(new java.util.Date()), 50, 190, paint);
+        
+        String detailText = "Maintenance Amount ₹" + (int)amount;
+        canvas.drawText(detailText, 50, 160, paint);
+        canvas.drawText("paid for " + month + " " + year, 50, 185, paint);
         
         canvas.drawText("-----------------------------------", 50, 240, paint);
         canvas.drawText("Regards,", 50, 270, paint);

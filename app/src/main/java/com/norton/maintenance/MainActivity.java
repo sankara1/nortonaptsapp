@@ -35,9 +35,11 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_DEFAULT_SIGNATURE = "default_signature";
     private static final String KEY_BUILDING_NAME = "building_name";
     private static final String KEY_FLAT_LIST = "flat_list";
+    private static final String KEY_CURRENT_YEAR = "current_year";
 
     private String buildingNameValue = "Norton Apartments";
     private String flatListValue = "1A, 1B, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12A, 14, 15, 16, 17A, 17B, 18A, 18B, 19, 20";
+    private int currentYearValue = 2026;
 
     // Data mapping for WhatsApp
     private Map<String, String> flatContacts = new HashMap<>();
@@ -103,6 +105,7 @@ public class MainActivity extends AppCompatActivity {
         payAmount.setText(prefs.getString(KEY_DEFAULT_AMOUNT, "2000"));
         buildingNameValue = prefs.getString(KEY_BUILDING_NAME, "Norton Apartments");
         flatListValue = prefs.getString(KEY_FLAT_LIST, "1A, 1B, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12A, 14, 15, 16, 17A, 17B, 18A, 18B, 19, 20");
+        currentYearValue = prefs.getInt(KEY_CURRENT_YEAR, 2026);
 
         // Update UI with loaded building name
         android.widget.TextView buildingTitle = findViewById(R.id.buildingNameText);
@@ -223,11 +226,11 @@ public class MainActivity extends AppCompatActivity {
         }
 
         double amount = Double.parseDouble(amountStr);
-        int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+        int currentYear = currentYearValue;
         MaintenanceRecord record = new MaintenanceRecord(flat, month, currentYear, payType, amount, phone);
 
         // 1. Open WhatsApp PDF immediately
-        maintenanceManager.sendWhatsApp(this, phone, flat, amount, signature, buildingNameValue);
+        maintenanceManager.sendWhatsApp(this, phone, flat, amount, signature, buildingNameValue, month, currentYear);
 
         // 2. Background database save
         maintenanceManager.savePayment(record);
@@ -242,12 +245,13 @@ public class MainActivity extends AppCompatActivity {
 
     private void showMultiplePaymentsDialog() {
         String selectedMonth = monthSpinner.getSelectedItem().toString();
-        int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+        int currentYear = currentYearValue;
         android.content.SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         String defaultAmt = prefs.getString(KEY_DEFAULT_AMOUNT, "2000");
 
         maintenanceManager.getDb().collection("payments")
             .whereEqualTo("month", selectedMonth)
+            .whereEqualTo("year", currentYear)
             .get()
             .addOnSuccessListener(querySnapshot -> {
                 Map<String, com.google.firebase.firestore.DocumentSnapshot> existingPayments = new HashMap<>();
@@ -369,7 +373,8 @@ public class MainActivity extends AppCompatActivity {
                                 } else {
                                     String phone = flatContacts.getOrDefault(flat, "");
                                     MaintenanceRecord record = new MaintenanceRecord(flat, selectedMonth, currentYear, type, amt, phone);
-                                    batch.set(maintenanceManager.getDb().collection("payments").document(), record);
+                                    String docId = flat + "_" + selectedMonth + "_" + currentYear;
+                                    batch.set(maintenanceManager.getDb().collection("payments").document(docId), record);
                                 }
                             } else {
                                 // If marked Unpaid, delete if existed
@@ -429,6 +434,16 @@ public class MainActivity extends AppCompatActivity {
         editFlats.setText(prefs.getString(KEY_FLAT_LIST, "1A, 1B, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12A, 14, 15, 16, 17A, 17B, 18A, 18B, 19, 20"));
         layout.addView(editFlats);
 
+        android.widget.TextView labelYear = new android.widget.TextView(this);
+        labelYear.setText("Financial Year:");
+        labelYear.setPadding(0, 30, 0, 0);
+        layout.addView(labelYear);
+
+        android.widget.EditText editYear = new android.widget.EditText(this);
+        editYear.setText(String.valueOf(prefs.getInt(KEY_CURRENT_YEAR, currentYearValue)));
+        editYear.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        layout.addView(editYear);
+
         new androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle("App Parameters")
             .setView(layout)
@@ -438,16 +453,19 @@ public class MainActivity extends AppCompatActivity {
                 String newSig = editSig.getText().toString();
                 String newBuild = editBuild.getText().toString();
                 String newFlats = editFlats.getText().toString();
+                int newYear = Integer.parseInt(editYear.getText().toString());
 
                 editor.putString(KEY_DEFAULT_AMOUNT, newAmt);
                 editor.putString(KEY_DEFAULT_SIGNATURE, newSig);
                 editor.putString(KEY_BUILDING_NAME, newBuild);
                 editor.putString(KEY_FLAT_LIST, newFlats);
+                editor.putInt(KEY_CURRENT_YEAR, newYear);
                 editor.apply();
                 
                 payAmount.setText(newAmt);
                 buildingNameValue = newBuild;
                 flatListValue = newFlats;
+                currentYearValue = newYear;
 
                 android.widget.TextView title = findViewById(R.id.buildingNameText);
                 if (title != null) title.setText(newBuild);
@@ -476,7 +494,7 @@ public class MainActivity extends AppCompatActivity {
             java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(inputStream));
             String line;
             com.google.firebase.firestore.WriteBatch batch = maintenanceManager.getDb().batch();
-            int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+            int currentYear = currentYearValue;
             int count = 0;
 
             // Skip header
@@ -498,9 +516,10 @@ public class MainActivity extends AppCompatActivity {
 
                 if (type.equalsIgnoreCase("PAYMENT")) {
                     MaintenanceRecord record = new MaintenanceRecord(id, month, currentYear, payType, amount, "");
-                    batch.set(maintenanceManager.getDb().collection("payments").document(), record);
+                    String docId = id + "_" + month + "_" + currentYear;
+                    batch.set(maintenanceManager.getDb().collection("payments").document(docId), record);
                 } else if (type.equalsIgnoreCase("EXPENSE")) {
-                    Expense exp = new Expense(id, amount, payType, month, new java.util.Date(), "");
+                    Expense exp = new Expense(id, amount, payType, month, currentYear, new java.util.Date(), "");
                     batch.set(maintenanceManager.getDb().collection("expenses").document(), exp);
                 } else if (type.equalsIgnoreCase("OPENING")) {
                     String docId = currentYear + "_" + month;
@@ -527,7 +546,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void showOpeningBalanceDialog() {
         String selectedMonth = monthSpinner.getSelectedItem().toString();
-        int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+        int currentYear = currentYearValue;
         String docId = currentYear + "_" + selectedMonth;
 
         maintenanceManager.getDb().collection("opening_balances").document(docId).get()
@@ -571,7 +590,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void shareSummaryToAdmin() {
-        int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+        int currentYear = currentYearValue;
         
         // 1. Fetch ALL Payments for the year
         maintenanceManager.getDb().collection("payments")
@@ -580,6 +599,7 @@ public class MainActivity extends AppCompatActivity {
             .addOnSuccessListener(pSnapshot -> {
                 // 2. Fetch ALL Expenses for the year
                 maintenanceManager.getDb().collection("expenses")
+                    .whereEqualTo("year", currentYear)
                     .get()
                     .addOnSuccessListener(eSnapshot -> {
                         // 3. Fetch ALL Opening Balances
@@ -651,8 +671,10 @@ public class MainActivity extends AppCompatActivity {
 
     private void viewExpensesAction() {
         String selectedMonth = monthSpinner.getSelectedItem().toString();
+        int currentYear = currentYearValue;
         maintenanceManager.getDb().collection("expenses")
             .whereEqualTo("month", selectedMonth)
+            .whereEqualTo("year", currentYear)
             .get()
             .addOnSuccessListener(querySnapshot -> {
                 showBulkEditDialog("Expenses: " + selectedMonth, "expenses", querySnapshot.getDocuments());
@@ -660,8 +682,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void viewPaymentsAction(String month) {
+        int currentYear = currentYearValue;
         maintenanceManager.getDb().collection("payments")
             .whereEqualTo("month", month)
+            .whereEqualTo("year", currentYear)
             .get()
             .addOnSuccessListener(querySnapshot -> {
                 showBulkEditDialog("Payments: " + month, "payments", querySnapshot.getDocuments());
@@ -743,7 +767,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void exportMonthlyData() {
         String selectedMonth = monthSpinner.getSelectedItem().toString();
-        int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+        int currentYear = currentYearValue;
         String balDocId = currentYear + "_" + selectedMonth;
 
         // 1. Fetch Opening Balances
@@ -755,11 +779,13 @@ public class MainActivity extends AppCompatActivity {
                 // 2. Fetch Payments
                 maintenanceManager.getDb().collection("payments")
                     .whereEqualTo("month", selectedMonth)
+                    .whereEqualTo("year", currentYear)
                     .get()
                     .addOnSuccessListener(pSnapshot -> {
                         // 3. Fetch Expenses
                         maintenanceManager.getDb().collection("expenses")
                             .whereEqualTo("month", selectedMonth)
+                            .whereEqualTo("year", currentYear)
                             .get()
                             .addOnSuccessListener(eSnapshot -> {
                                 StringBuilder csv = new StringBuilder("TYPE,ID/FLAT,MONTH,AMOUNT,PAY_TYPE,DATE\n");
@@ -856,6 +882,7 @@ public class MainActivity extends AppCompatActivity {
                 .setPositiveButton("Close", null)
                 .setNeutralButton("Copy & Share", null)
                 .setNegativeButton("Edit Payments", null)
+                .setPositiveButton("Cleanup Duplicates", (d, w) -> cleanupDuplicates(months[dialogMonthSpinner.getSelectedItemPosition()]))
                 .create();
 
         dialogMonthSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
@@ -888,10 +915,52 @@ public class MainActivity extends AppCompatActivity {
         dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v -> {
             viewPaymentsAction(months[dialogMonthSpinner.getSelectedItemPosition()]);
         });
+
+        dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            cleanupDuplicates(months[dialogMonthSpinner.getSelectedItemPosition()]);
+        });
+    }
+
+    private void cleanupDuplicates(String month) {
+        int currentYear = currentYearValue;
+        maintenanceManager.getDb().collection("payments")
+            .whereEqualTo("month", month)
+            .whereEqualTo("year", currentYear)
+            .get()
+            .addOnSuccessListener(querySnapshot -> {
+                com.google.firebase.firestore.WriteBatch batch = maintenanceManager.getDb().batch();
+                java.util.Map<String, com.google.firebase.firestore.DocumentSnapshot> uniqueFlats = new java.util.HashMap<>();
+                java.util.List<com.google.firebase.firestore.DocumentSnapshot> toDelete = new java.util.ArrayList<>();
+
+                for (com.google.firebase.firestore.DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                    String flat = doc.getString("flatNo");
+                    if (flat == null) continue;
+
+                    if (uniqueFlats.containsKey(flat)) {
+                        toDelete.add(doc);
+                    } else {
+                        uniqueFlats.put(flat, doc);
+                    }
+                }
+
+                for (com.google.firebase.firestore.DocumentSnapshot doc : toDelete) {
+                    batch.delete(doc.getReference());
+                }
+
+                if (!toDelete.isEmpty()) {
+                    int count = toDelete.size();
+                    batch.commit().addOnSuccessListener(aVoid -> {
+                        Toast.makeText(this, "Cleaned up " + count + " duplicates!", Toast.LENGTH_SHORT).show();
+                        showPaymentStatus(month); // Refresh
+                    });
+                } else {
+                    Toast.makeText(this, "No duplicates found.", Toast.LENGTH_SHORT).show();
+                }
+            });
     }
 
     private void updateStatusText(String month, android.widget.TextView statusView) {
-        int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+        int currentYear = currentYearValue;
         String balDocId = currentYear + "_" + month;
 
         maintenanceManager.getDb().collection("opening_balances").document(balDocId).get()
@@ -901,34 +970,61 @@ public class MainActivity extends AppCompatActivity {
 
                 maintenanceManager.getDb().collection("payments")
                 .whereEqualTo("month", month)
+                .whereEqualTo("year", currentYear)
                 .get()
                 .addOnSuccessListener(querySnapshot -> {
                     double totalPaidSumStatus = 0;
                     double totalCashPaid = 0;
                     double totalGpayPaid = 0;
-                    java.util.Map<String, String> paidFlatTypes = new java.util.HashMap<>();
+                    
+                    // Map to track sum and type per flat
+                    java.util.Map<String, Double> flatAmounts = new java.util.HashMap<>();
+                    java.util.Map<String, String> flatTypes = new java.util.HashMap<>();
+                    java.util.Map<String, Integer> flatEntryCount = new java.util.HashMap<>();
+
                     for (com.google.firebase.firestore.DocumentSnapshot doc : querySnapshot.getDocuments()) {
                         String f = doc.getString("flatNo");
+                        if (f == null) continue;
+
                         String type = doc.getString("paymentType");
-                        if (f != null) paidFlatTypes.put(f, type != null ? type : "Cash");
+                        if (type == null) type = "Cash";
                         
-                        Double amt = doc.getDouble("amount");
-                        if (amt != null) {
-                            totalPaidSumStatus += amt;
-                            if ("Gpay".equals(type)) totalGpayPaid += amt;
-                            else totalCashPaid += amt;
+                        Double amt = 0.0;
+                        Object amtObj = doc.get("amount");
+                        if (amtObj instanceof Number) amt = ((Number) amtObj).doubleValue();
+
+                        totalPaidSumStatus += amt;
+                        if ("Gpay".equalsIgnoreCase(type)) totalGpayPaid += amt;
+                        else totalCashPaid += amt;
+
+                        flatAmounts.put(f, flatAmounts.getOrDefault(f, 0.0) + amt);
+                        flatTypes.put(f, type); // Last entry's type
+                        flatEntryCount.put(f, flatEntryCount.getOrDefault(f, 0) + 1);
+                    }
+
+                    java.util.List<String> paidInList = new java.util.ArrayList<>();
+                    java.util.List<String> pendingInList = new java.util.ArrayList<>();
+
+                    for (String f : flats) {
+                        if (flatAmounts.containsKey(f)) {
+                            String entry = f + " (₹" + Math.round(flatAmounts.get(f)) + " " + flatTypes.get(f) + ")";
+                            if (flatEntryCount.get(f) > 1) {
+                                entry += " [DUP x" + flatEntryCount.get(f) + "]";
+                            }
+                            paidInList.add(entry);
+                        } else {
+                            pendingInList.add(f);
                         }
                     }
 
-                    StringBuilder pending = new StringBuilder("Pending (" + (flats.length - paidFlatTypes.size()) + "):\n");
-                    StringBuilder paidStr = new StringBuilder("Paid (" + paidFlatTypes.size() + "):\n");
+                    StringBuilder paidStr = new StringBuilder("Paid (" + paidInList.size() + "):\n");
+                    for (int i = 0; i < paidInList.size(); i++) {
+                        paidStr.append(paidInList.get(i)).append(i == paidInList.size() - 1 ? "" : ", ");
+                    }
 
-                    for (String f : flats) {
-                        if (paidFlatTypes.containsKey(f)) {
-                            paidStr.append(f).append(" (").append(paidFlatTypes.get(f)).append("), ");
-                        } else {
-                            pending.append(f).append(", ");
-                        }
+                    StringBuilder pending = new StringBuilder("\n\nPending (" + pendingInList.size() + "):\n");
+                    for (int i = 0; i < pendingInList.size(); i++) {
+                        pending.append(pendingInList.get(i)).append(i == pendingInList.size() - 1 ? "" : ", ");
                     }
 
                     final double finalTotalPaid = totalPaidSumStatus;
@@ -937,17 +1033,21 @@ public class MainActivity extends AppCompatActivity {
 
                     maintenanceManager.getDb().collection("expenses")
                             .whereEqualTo("month", month)
+                            .whereEqualTo("year", currentYear)
                             .get()
                             .addOnSuccessListener(eSnapshot -> {
                                 double totalExp = 0;
                                 double totalCashExp = 0;
                                 double totalGpayExp = 0;
                                 for (com.google.firebase.firestore.DocumentSnapshot doc : eSnapshot.getDocuments()) {
-                                    Double amt = doc.getDouble("amount");
+                                    Double amt = null;
+                                    Object amtObj = doc.get("amount");
+                                    if (amtObj instanceof Number) amt = ((Number) amtObj).doubleValue();
+
                                     if (amt != null) {
                                         totalExp += amt;
                                         String type = doc.getString("paymentType");
-                                        if ("Gpay".equals(type)) totalGpayExp += amt;
+                                        if ("Gpay".equalsIgnoreCase(type)) totalGpayExp += amt;
                                         else totalCashExp += amt;
                                     }
                                 }
@@ -956,12 +1056,12 @@ public class MainActivity extends AppCompatActivity {
                                 double netGpay = openingGpay + finalGpayPaid - totalGpayExp;
 
                                 String statusText = "Summary for " + month + ":\n" +
-                                        "Opening: Cash ₹" + (int)openingCash + ", Acc ₹" + (int)openingGpay + "\n" +
-                                        "Collected: ₹" + (int) finalTotalPaid + " (Cash: " + (int)finalCashPaid + ", Gpay: " + (int)finalGpayPaid + ")\n" +
-                                        "Expenses:  ₹" + (int) totalExp + " (Cash: " + (int)totalCashExp + ", Gpay: " + (int)totalGpayExp + ")\n" +
+                                        "Opening: Cash ₹" + Math.round(openingCash) + ", Acc ₹" + Math.round(openingGpay) + "\n" +
+                                        "Collected: ₹" + Math.round(finalTotalPaid) + " (Cash: " + Math.round(finalCashPaid) + ", Gpay: " + Math.round(finalGpayPaid) + ")\n" +
+                                        "Expenses:  ₹" + Math.round(totalExp) + " (Cash: " + Math.round(totalCashExp) + ", Gpay: " + Math.round(totalGpayExp) + ")\n" +
                                         "---------------------------\n" +
-                                        "CLOSING: Cash ₹" + (int)netCash + ", Acc ₹" + (int)netGpay + "\n" +
-                                        "TOTAL BALANCE: ₹" + (int)(netCash + netGpay) + "\n\n" +
+                                        "CLOSING: Cash ₹" + Math.round(netCash) + ", Acc ₹" + Math.round(netGpay) + "\n" +
+                                        "TOTAL BALANCE: ₹" + Math.round(netCash + netGpay) + "\n\n" +
                                         paidStr.toString() + "\n\n" +
                                         pending.toString();
 
@@ -983,7 +1083,8 @@ public class MainActivity extends AppCompatActivity {
         if (amountStr.isEmpty()) return;
 
         double amount = Double.parseDouble(amountStr);
-        Expense exp = new Expense(type, amount, payType, selectedMonth, expenseCalendar.getTime(), "");
+        int currentYear = currentYearValue;
+        Expense exp = new Expense(type, amount, payType, selectedMonth, currentYear, expenseCalendar.getTime(), "");
 
         maintenanceManager.saveExpense(exp)
             .addOnSuccessListener(doc -> {
