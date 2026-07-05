@@ -52,7 +52,7 @@ public class MaintenanceManager {
         return db.collection("contacts").get();
     }
 
-    public void sendWhatsApp(Context context, String phone, String flatNo, double amount, String signature, String buildingName, String month, int year) {
+    public void sendWhatsApp(Context context, String phone, String flatNo, int amount, String signature, String buildingName, String month, int year) {
         // Create PDF
         File pdfFile = createPdf(context, flatNo, amount, signature, buildingName, month, year);
         if (pdfFile == null) {
@@ -113,7 +113,7 @@ public class MaintenanceManager {
         }
     }
 
-    private File createPdf(Context context, String flatNo, double amount, String signature, String buildingName, String month, int year) {
+    private File createPdf(Context context, String flatNo, int amount, String signature, String buildingName, String month, int year) {
         PdfDocument document = new PdfDocument();
         PdfDocument.PageInfo pageInfo = new PdfDocument.PageInfo.Builder(300, 450, 1).create();
         PdfDocument.Page page = document.startPage(pageInfo);
@@ -131,7 +131,7 @@ public class MaintenanceManager {
         canvas.drawText("-----------------------------------", 50, 100, paint);
         canvas.drawText("Flat No: " + flatNo, 50, 130, paint);
         
-        String detailText = "Maintenance Amount ₹" + (int)amount;
+        String detailText = "Maintenance Amount ₹" + amount;
         canvas.drawText(detailText, 50, 160, paint);
         canvas.drawText("paid for " + month + " " + year, 50, 185, paint);
         

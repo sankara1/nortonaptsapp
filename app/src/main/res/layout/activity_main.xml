@@ -28,9 +28,6 @@
             android:textSize="14sp"
             android:layout_marginBottom="16dp"/>
 
-        <!-- ========================================== -->
-        <!-- PAYMENT SECTION                            -->
-        <!-- ========================================== -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -51,7 +48,6 @@
                     android:textColor="#4F46E5"
                     android:layout_marginBottom="10dp"/>
 
-                <!-- Row 1: Flat & Month Dropdowns -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -87,7 +83,6 @@
                     </LinearLayout>
                 </LinearLayout>
 
-                <!-- Row 2: Payment Method Radio Group -->
                 <RadioGroup
                     android:id="@+id/paymentTypeRadioGroup"
                     android:layout_width="match_parent"
@@ -110,12 +105,12 @@
                         android:layout_marginStart="16dp"/>
                 </RadioGroup>
 
-                <!-- Row 3: Amount & Phone Inputs -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
-                    android:weightSum="2"
+                    android:weightSum="3"
+                    android:baselineAligned="false"
                     android:layout_marginBottom="12dp">
 
                     <EditText
@@ -123,22 +118,31 @@
                         android:layout_width="0dp"
                         android:layout_height="48dp"
                         android:layout_weight="1"
-                        android:layout_marginEnd="8dp"
-                        android:hint="Amt (e.g. 2000)"
+                        android:layout_marginEnd="6dp"
+                        android:hint="Amount"
                         android:inputType="number"
-                        android:textSize="14sp"/>
+                        android:textSize="13sp"/>
 
                     <EditText
                         android:id="@+id/phoneInput"
                         android:layout_width="0dp"
                         android:layout_height="48dp"
                         android:layout_weight="1"
-                        android:hint="WhatsApp No."
+                        android:layout_marginEnd="6dp"
+                        android:hint="WhatsApp"
                         android:inputType="phone"
-                        android:textSize="14sp"/>
+                        android:textSize="13sp"/>
+
+                    <EditText
+                        android:id="@+id/payComments"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:hint="Comments"
+                        android:maxLength="16"
+                        android:textSize="13sp"/>
                 </LinearLayout>
 
-                <!-- Row 4: Action Buttons -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -169,9 +173,6 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- ========================================== -->
-        <!-- EXPENSE SECTION                            -->
-        <!-- ========================================== -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -192,7 +193,6 @@
                     android:textColor="#E11D48"
                     android:layout_marginBottom="10dp"/>
 
-                <!-- Expense Type -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -206,7 +206,6 @@
                         android:background="@android:drawable/btn_dropdown"/>
                 </LinearLayout>
 
-                <!-- Payment Method -->
                 <RadioGroup
                     android:id="@+id/expensePaymentTypeRadioGroup"
                     android:layout_width="match_parent"
@@ -229,12 +228,12 @@
                         android:layout_marginStart="16dp"/>
                 </RadioGroup>
 
-                <!-- Row: Amount & Date Inputs -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
-                    android:weightSum="2"
+                    android:weightSum="3"
+                    android:baselineAligned="false"
                     android:layout_marginBottom="12dp">
 
                     <EditText
@@ -242,23 +241,32 @@
                         android:layout_width="0dp"
                         android:layout_height="48dp"
                         android:layout_weight="1"
-                        android:layout_marginEnd="8dp"
-                        android:hint="Amt (e.g. 8000)"
+                        android:layout_marginEnd="6dp"
+                        android:hint="Amount"
                         android:inputType="number"
-                        android:textSize="14sp"/>
+                        android:textSize="13sp"/>
 
                     <EditText
                         android:id="@+id/expenseDate"
                         android:layout_width="0dp"
                         android:layout_height="48dp"
                         android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
                         android:hint="Date"
                         android:focusable="false"
                         android:clickable="true"
-                        android:textSize="14sp"/>
+                        android:textSize="13sp"/>
+
+                    <EditText
+                        android:id="@+id/expenseComments"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:hint="Comments"
+                        android:maxLength="16"
+                        android:textSize="13sp"/>
                 </LinearLayout>
 
-                <!-- Row: Action Buttons -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -289,9 +297,6 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- ========================================== -->
-        <!-- SETTINGS / REPORTS SECTION (GRID LAYOUT)   -->
-        <!-- ========================================== -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -375,7 +380,6 @@
 
                 </GridLayout>
 
-                <!-- Kept Get Template full width at bottom as a utility -->
                 <Button
                     android:id="@+id/btnGetCsvTemplate"
                     android:layout_width="match_parent"

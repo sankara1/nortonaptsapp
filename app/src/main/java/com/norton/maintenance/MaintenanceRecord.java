@@ -9,7 +9,7 @@ public class MaintenanceRecord {
     public String month;
     public int year;
     public String paymentType;
-    public double amount;
+    public int amount;
     public String phoneNumber;
     @ServerTimestamp public Date date;
     public String comments;
@@ -18,12 +18,13 @@ public class MaintenanceRecord {
     public MaintenanceRecord() {}
 
     // 2. The constructor your MainActivity.java is using
-    public MaintenanceRecord(String flatNo, String month, int year, String paymentType, double amount, String phoneNumber) {
+    public MaintenanceRecord(String flatNo, String month, int year, String paymentType, int amount, String phoneNumber, String comments) {
         this.flatNo = flatNo;
         this.month = month;
         this.year = year;
         this.paymentType = paymentType;
         this.amount = amount;
         this.phoneNumber = phoneNumber;
+        this.comments = comments;
     }
 }

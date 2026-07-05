@@ -26,7 +26,7 @@ public class MainActivity extends AppCompatActivity {
     private MaintenanceManager maintenanceManager;
     private Spinner flatSpinner, monthSpinner, expenseSpinner;
     private RadioGroup paymentTypeRadioGroup, expensePaymentTypeRadioGroup;
-    private EditText payAmount, expAmount, phoneInput, expenseDateInput;
+    private EditText payAmount, expAmount, phoneInput, expenseDateInput, payComments, expComments;
     private String[] flats = {"1A", "1B", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "12A", "14", "15", "16", "17A", "17B", "18A", "18B", "19", "20"};
     private java.util.Calendar expenseCalendar = java.util.Calendar.getInstance();
 
@@ -70,6 +70,8 @@ public class MainActivity extends AppCompatActivity {
         expAmount = findViewById(R.id.expenseAmount);
         expenseDateInput = findViewById(R.id.expenseDate);
         phoneInput = findViewById(R.id.phoneInput);
+        payComments = findViewById(R.id.payComments);
+        expComments = findViewById(R.id.expenseComments);
 
         Button btnPay = findViewById(R.id.btnSavePayment);
         Button btnMultiPay = findViewById(R.id.btnMultiplePayments);
@@ -182,7 +184,7 @@ public class MainActivity extends AppCompatActivity {
         monthSpinner.setSelection(currentMonth);
 
         // 3. Expenses
-        String[] expTypes = {"Watchman Salary", "Ravi Salary", "Kolam Salary", "TNEB", "Maintenance","Plumbing/Motor","Other","W Bonus","R bonus","K bonus","CCTV"};
+        String[] expTypes = {"Watchman Salary", "Ravi Salary", "Kolam Salary", "TNEB", "Maintenance","Plumbing/Motor","Other","W Bonus","R bonus","K bonus","CCTV","Consumables"};
         ArrayAdapter<String> expAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, expTypes);
         expenseSpinner.setAdapter(expAdapter);
     }
@@ -211,6 +213,7 @@ public class MainActivity extends AppCompatActivity {
         
         String amountStr = payAmount.getText().toString();
         String phone = phoneInput.getText().toString();
+        String comments = payComments.getText().toString();
 
         android.content.SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         String signature = prefs.getString(KEY_DEFAULT_SIGNATURE, "S.Sankarasubramanian");
@@ -225,9 +228,9 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        double amount = Double.parseDouble(amountStr);
+        int amount = Integer.parseInt(amountStr);
         int currentYear = currentYearValue;
-        MaintenanceRecord record = new MaintenanceRecord(flat, month, currentYear, payType, amount, phone);
+        MaintenanceRecord record = new MaintenanceRecord(flat, month, currentYear, payType, amount, phone, comments);
 
         // 1. Open WhatsApp PDF immediately
         maintenanceManager.sendWhatsApp(this, phone, flat, amount, signature, buildingNameValue, month, currentYear);
@@ -239,6 +242,7 @@ public class MainActivity extends AppCompatActivity {
 
         // Clear fields for next entry
         payAmount.setText("2000"); // Reset to default
+        payComments.setText("");
 
         Toast.makeText(this, "Generating PDF & Saving...", Toast.LENGTH_SHORT).show();
     }
@@ -261,37 +265,50 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 android.widget.ScrollView scrollView = new android.widget.ScrollView(this);
-                android.widget.TableLayout table = new android.widget.TableLayout(this);
-                table.setPadding(20, 20, 20, 20);
-                table.setStretchAllColumns(true);
-                scrollView.addView(table);
+                android.widget.LinearLayout container = new android.widget.LinearLayout(this);
+                container.setOrientation(android.widget.LinearLayout.VERTICAL);
+                container.setPadding(20, 20, 20, 20);
+                scrollView.addView(container);
 
                 // Header
-                android.widget.TableRow header = new android.widget.TableRow(this);
+                android.widget.LinearLayout header = new android.widget.LinearLayout(this);
+                header.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+                header.setPadding(10, 10, 10, 10);
                 String[] titles = {"Flat", "Status", "Type", "Amount"};
-                for (String t : titles) {
+                int[] weights = {1, 3, 3, 2};
+                for (int i = 0; i < titles.length; i++) {
                     android.widget.TextView tv = new android.widget.TextView(this);
-                    tv.setText(t);
-                    tv.setPadding(10, 10, 10, 10);
+                    tv.setText(titles[i]);
                     tv.setTypeface(null, android.graphics.Typeface.BOLD);
+                    android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(0, -2, weights[i]);
+                    tv.setLayoutParams(lp);
                     header.addView(tv);
                 }
-                table.addView(header);
+                container.addView(header);
 
                 Map<String, android.widget.RadioButton> paidRadios = new HashMap<>();
                 Map<String, android.widget.RadioButton> unpaidRadios = new HashMap<>();
                 Map<String, android.widget.RadioButton> cashRadios = new HashMap<>();
                 Map<String, android.widget.RadioButton> gpayRadios = new HashMap<>();
                 Map<String, EditText> amountInputs = new HashMap<>();
+                Map<String, EditText> commentInputs = new HashMap<>();
 
                 for (String flat : flats) {
-                    android.widget.TableRow row = new android.widget.TableRow(this);
-                    row.setPadding(0, 10, 0, 10);
+                    android.widget.LinearLayout itemLayout = new android.widget.LinearLayout(this);
+                    itemLayout.setOrientation(android.widget.LinearLayout.VERTICAL);
+                    itemLayout.setPadding(0, 15, 0, 15);
+                    itemLayout.setBackgroundResource(android.R.drawable.dialog_holo_light_frame); // Optional: add some border/divider feel
+
+                    // Row 1: Flat, Status, Type, Amount
+                    android.widget.LinearLayout row1 = new android.widget.LinearLayout(this);
+                    row1.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+                    row1.setGravity(android.view.Gravity.CENTER_VERTICAL);
 
                     // 1. Flat Number
                     android.widget.TextView tvFlat = new android.widget.TextView(this);
                     tvFlat.setText(flat);
-                    row.addView(tvFlat);
+                    tvFlat.setTypeface(null, android.graphics.Typeface.BOLD);
+                    row1.addView(tvFlat, new android.widget.LinearLayout.LayoutParams(0, -2, 1));
 
                     // 2. Paid/Unpaid RadioGroup
                     android.widget.RadioGroup rgStatus = new android.widget.RadioGroup(this);
@@ -302,7 +319,7 @@ public class MainActivity extends AppCompatActivity {
                     rbUnpaid.setText("U");
                     rgStatus.addView(rbPaid);
                     rgStatus.addView(rbUnpaid);
-                    row.addView(rgStatus);
+                    row1.addView(rgStatus, new android.widget.LinearLayout.LayoutParams(0, -2, 3));
                     paidRadios.put(flat, rbPaid);
                     unpaidRadios.put(flat, rbUnpaid);
 
@@ -315,42 +332,80 @@ public class MainActivity extends AppCompatActivity {
                     rbGpay.setText("G");
                     rgType.addView(rbCash);
                     rgType.addView(rbGpay);
-                    row.addView(rgType);
+                    row1.addView(rgType, new android.widget.LinearLayout.LayoutParams(0, -2, 3));
                     cashRadios.put(flat, rbCash);
                     gpayRadios.put(flat, rbGpay);
 
                     // 4. Amount EditText
                     android.widget.EditText etAmount = new android.widget.EditText(this);
                     etAmount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-                    row.addView(etAmount);
+                    etAmount.setTextSize(14);
+                    row1.addView(etAmount, new android.widget.LinearLayout.LayoutParams(0, -2, 2));
                     amountInputs.put(flat, etAmount);
 
-                    // Logic: Enable Type/Amount only if Paid
+                    itemLayout.addView(row1);
+
+                    // Row 2: Comment EditText (below)
+                    android.widget.EditText etComment = new android.widget.EditText(this);
+                    etComment.setHint("Comment for " + flat);
+                    etComment.setTextSize(13);
+                    etComment.setFilters(new android.text.InputFilter[] {new android.text.InputFilter.LengthFilter(16)});
+                    android.widget.LinearLayout.LayoutParams commentLp = new android.widget.LinearLayout.LayoutParams(-1, -2);
+                    commentLp.setMargins(60, 0, 20, 0); // Indent a bit
+                    etComment.setLayoutParams(commentLp);
+                    itemLayout.addView(etComment);
+                    commentInputs.put(flat, etComment);
+
+                    // Logic: Enable Type/Amount/Comment only if Paid
                     rbPaid.setOnCheckedChangeListener((btn, isChecked) -> {
                         rgType.setEnabled(isChecked);
                         rbCash.setEnabled(isChecked);
                         rbGpay.setEnabled(isChecked);
                         etAmount.setEnabled(isChecked);
+                        etComment.setEnabled(isChecked);
+                        if (!isChecked) {
+                            etComment.setAlpha(0.5f);
+                            row1.setAlpha(0.7f);
+                        } else {
+                            etComment.setAlpha(1.0f);
+                            row1.setAlpha(1.0f);
+                        }
                     });
 
                     // Set initial state
                     if (existingPayments.containsKey(flat)) {
                         com.google.firebase.firestore.DocumentSnapshot doc = existingPayments.get(flat);
                         rbPaid.setChecked(true);
-                        etAmount.setText(String.valueOf(doc != null ? doc.get("amount") : defaultAmt));
+                        Object amtObj = doc != null ? doc.get("amount") : defaultAmt;
+                        if (amtObj instanceof Double) {
+                            etAmount.setText(String.valueOf(((Double) amtObj).intValue()));
+                        } else {
+                            etAmount.setText(String.valueOf(amtObj));
+                        }
+                        etComment.setText(doc != null ? doc.getString("comments") : "");
                         String type = doc != null ? doc.getString("paymentType") : "Cash";
                         if ("Gpay".equals(type)) rbGpay.setChecked(true); else rbCash.setChecked(true);
                     } else {
                         rbUnpaid.setChecked(true);
                         etAmount.setText(defaultAmt);
+                        etComment.setText("");
                         rbCash.setChecked(true);
                         rgType.setEnabled(false);
                         rbCash.setEnabled(false);
                         rbGpay.setEnabled(false);
                         etAmount.setEnabled(false);
+                        etComment.setEnabled(false);
+                        etComment.setAlpha(0.5f);
+                        row1.setAlpha(0.7f);
                     }
 
-                    table.addView(row);
+                    container.addView(itemLayout);
+
+                    // Add a simple separator line
+                    android.view.View divider = new android.view.View(this);
+                    divider.setLayoutParams(new android.widget.LinearLayout.LayoutParams(-1, 1));
+                    divider.setBackgroundColor(android.graphics.Color.LTGRAY);
+                    container.addView(divider);
                 }
 
                 new androidx.appcompat.app.AlertDialog.Builder(this)
@@ -362,17 +417,18 @@ public class MainActivity extends AppCompatActivity {
                             boolean isPaid = paidRadios.get(flat).isChecked();
                             if (isPaid) {
                                 String amtStr = amountInputs.get(flat).getText().toString();
-                                double amt = Double.parseDouble(amtStr.isEmpty() ? defaultAmt : amtStr);
+                                int amt = Integer.parseInt(amtStr.isEmpty() ? defaultAmt : amtStr);
                                 String type = gpayRadios.get(flat).isChecked() ? "Gpay" : "Cash";
+                                String comments = commentInputs.get(flat).getText().toString();
 
                                 if (existingPayments.containsKey(flat)) {
                                     com.google.firebase.firestore.DocumentSnapshot existingDoc = existingPayments.get(flat);
                                     if (existingDoc != null) {
-                                        batch.update(existingDoc.getReference(), "amount", amt, "paymentType", type);
+                                        batch.update(existingDoc.getReference(), "amount", amt, "paymentType", type, "comments", comments);
                                     }
                                 } else {
                                     String phone = flatContacts.getOrDefault(flat, "");
-                                    MaintenanceRecord record = new MaintenanceRecord(flat, selectedMonth, currentYear, type, amt, phone);
+                                    MaintenanceRecord record = new MaintenanceRecord(flat, selectedMonth, currentYear, type, amt, phone, comments);
                                     String docId = flat + "_" + selectedMonth + "_" + currentYear;
                                     batch.set(maintenanceManager.getDb().collection("payments").document(docId), record);
                                 }
@@ -512,14 +568,17 @@ public class MainActivity extends AppCompatActivity {
                 String payType = parts[4].trim();
 
                 if (amtStr.isEmpty()) continue;
-                double amount = Double.parseDouble(amtStr);
+                
+                // Parse as double first to handle cases like "2000.0", then cast to int
+                int amount = (int) Double.parseDouble(amtStr);
+                String comments = parts.length > 6 ? parts[6].trim() : "";
 
                 if (type.equalsIgnoreCase("PAYMENT")) {
-                    MaintenanceRecord record = new MaintenanceRecord(id, month, currentYear, payType, amount, "");
+                    MaintenanceRecord record = new MaintenanceRecord(id, month, currentYear, payType, amount, "", comments);
                     String docId = id + "_" + month + "_" + currentYear;
                     batch.set(maintenanceManager.getDb().collection("payments").document(docId), record);
                 } else if (type.equalsIgnoreCase("EXPENSE")) {
-                    Expense exp = new Expense(id, amount, payType, month, currentYear, new java.util.Date(), "");
+                    Expense exp = new Expense(id, amount, payType, month, currentYear, new java.util.Date(), comments);
                     batch.set(maintenanceManager.getDb().collection("expenses").document(), exp);
                 } else if (type.equalsIgnoreCase("OPENING")) {
                     String docId = currentYear + "_" + month;
@@ -606,7 +665,7 @@ public class MainActivity extends AppCompatActivity {
                         maintenanceManager.getDb().collection("opening_balances")
                             .get()
                             .addOnSuccessListener(bSnapshot -> {
-                                StringBuilder csv = new StringBuilder("TYPE,ID/FLAT,MONTH,AMOUNT,PAY_TYPE,DATE\n");
+                                StringBuilder csv = new StringBuilder("TYPE,ID/FLAT,MONTH,AMOUNT,PAY_TYPE,DATE,COMMENTS\n");
                                 
                                 // Map balances for easy lookup
                                 Map<String, com.google.firebase.firestore.DocumentSnapshot> balances = new HashMap<>();
@@ -618,7 +677,6 @@ public class MainActivity extends AppCompatActivity {
                                 
                                 for (String m : monthsList) {
                                     String balId = currentYear + "_" + m;
-                                    boolean hasData = false;
                                     
                                     // Check if this month has any data
                                     List<com.google.firebase.firestore.DocumentSnapshot> monthPayments = new ArrayList<>();
@@ -633,33 +691,78 @@ public class MainActivity extends AppCompatActivity {
 
                                     if (monthPayments.isEmpty() && monthExpenses.isEmpty() && !balances.containsKey(balId)) continue;
 
-                                    csv.append("--- ").append(m.toUpperCase()).append(" ---,,,,,\n");
+                                    csv.append("--- ").append(m.toUpperCase()).append(" ---,,,,,,\n");
                                     
                                     // Add Opening
                                     if (balances.containsKey(balId)) {
                                         com.google.firebase.firestore.DocumentSnapshot b = balances.get(balId);
-                                        csv.append("OPENING,Cash,,").append(b.get("cash")).append(",Cash,\n");
-                                        csv.append("OPENING,Account,,").append(b.get("account")).append(",Gpay,\n");
+                                        csv.append("OPENING,Cash,,").append(b.get("cash") != null ? Math.round(b.getDouble("cash")) : 0).append(",Cash,,\n");
+                                        csv.append("OPENING,Account,,").append(b.get("account") != null ? Math.round(b.getDouble("account")) : 0).append(",Gpay,,\n");
                                     }
 
                                     // Add Payments
                                     for (com.google.firebase.firestore.DocumentSnapshot d : monthPayments) {
                                         csv.append("PAYMENT,").append(d.getString("flatNo")).append(",")
                                            .append(m).append(",")
-                                           .append(d.get("amount")).append(",")
+                                           .append(d.get("amount") != null ? Math.round(((Number)d.get("amount")).doubleValue()) : 0).append(",")
                                            .append(d.getString("paymentType")).append(",")
-                                           .append(d.get("date")).append("\n");
+                                           .append(d.get("date")).append(",")
+                                           .append(d.getString("comments") != null ? d.getString("comments") : "").append("\n");
                                     }
 
                                     // Add Expenses
                                     for (com.google.firebase.firestore.DocumentSnapshot d : monthExpenses) {
                                         csv.append("EXPENSE,").append(d.getString("type")).append(",")
                                            .append(m).append(",")
-                                           .append(d.get("amount")).append(",")
+                                           .append(d.get("amount") != null ? Math.round(((Number)d.get("amount")).doubleValue()) : 0).append(",")
                                            .append(d.getString("paymentType")).append(",")
-                                           .append(d.get("date")).append("\n");
+                                           .append(d.get("date")).append(",")
+                                           .append(d.getString("comments") != null ? d.getString("comments") : "").append("\n");
                                     }
-                                    csv.append(",,,,,\n");
+
+                                    // Add Monthly Statistics
+                                    int cashColl = 0;
+                                    int gpayColl = 0;
+                                    int totalExp = 0;
+                                    List<String> paidFlats = new ArrayList<>();
+                                    List<String> missedFlats = new ArrayList<>();
+                                    for (String f : flats) missedFlats.add(f);
+
+                                    for (com.google.firebase.firestore.DocumentSnapshot d : monthPayments) {
+                                        String f = d.getString("flatNo");
+                                        int amt = d.get("amount") != null ? (int) Math.round(((Number)d.get("amount")).doubleValue()) : 0;
+                                        String type = d.getString("paymentType");
+                                        if ("Gpay".equalsIgnoreCase(type)) gpayColl += amt;
+                                        else cashColl += amt;
+                                        
+                                        if (f != null) {
+                                            paidFlats.add(f);
+                                            missedFlats.remove(f);
+                                        }
+                                    }
+
+                                    for (com.google.firebase.firestore.DocumentSnapshot d : monthExpenses) {
+                                        totalExp += d.get("amount") != null ? (int) Math.round(((Number)d.get("amount")).doubleValue()) : 0;
+                                    }
+
+                                    csv.append("SUMMARY,Collected Cash,,,").append(cashColl).append(",,\n");
+                                    csv.append("SUMMARY,Collected Gpay,,,").append(gpayColl).append(",,\n");
+                                    csv.append("SUMMARY,Total Collected,,,").append(cashColl + gpayColl).append(",,\n");
+                                    csv.append("SUMMARY,Total Expenses,,,").append(totalExp).append(",,\n");
+                                    
+                                    StringBuilder paidListStr = new StringBuilder();
+                                    for (int i = 0; i < paidFlats.size(); i++) {
+                                        paidListStr.append(paidFlats.get(i)).append(i == paidFlats.size() - 1 ? "" : " ");
+                                    }
+                                    csv.append("SUMMARY,Who Paid (").append(paidFlats.size()).append("),,,").append(paidListStr.toString()).append(",,\n");
+                                    
+                                    StringBuilder missedListStr = new StringBuilder();
+                                    for (int i = 0; i < missedFlats.size(); i++) {
+                                        missedListStr.append(missedFlats.get(i)).append(i == missedFlats.size() - 1 ? "" : " ");
+                                    }
+                                    csv.append("SUMMARY,Who Missed (").append(missedFlats.size()).append("),,,").append(missedListStr.toString()).append(",,\n");
+
+                                    csv.append(",,,,,,\n");
                                 }
 
                                 maintenanceManager.shareCsv(this, "Full_Accounts_" + currentYear + ".csv", csv.toString(), "9962446732");
@@ -700,29 +803,39 @@ public class MainActivity extends AppCompatActivity {
         scrollView.addView(mainLayout);
 
         Map<String, EditText> amountFields = new HashMap<>();
+        Map<String, EditText> commentFields = new HashMap<>();
         List<String> docsToDelete = new ArrayList<>();
 
         for (com.google.firebase.firestore.DocumentSnapshot doc : documents) {
             String name = collection.equals("payments") ? "Flat " + doc.getString("flatNo") : doc.getString("type");
             String payType = doc.getString("paymentType");
             if (payType == null) payType = "Cash"; // Default for old records
-            String labelText = name + "\n[" + payType + "]";
+            String labelText = name + " [" + payType + "]";
             
+            android.widget.LinearLayout itemContainer = new android.widget.LinearLayout(this);
+            itemContainer.setOrientation(android.widget.LinearLayout.VERTICAL);
+            itemContainer.setPadding(0, 15, 0, 15);
+
             android.widget.LinearLayout row = new android.widget.LinearLayout(this);
             row.setOrientation(android.widget.LinearLayout.HORIZONTAL);
             row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-            row.setPadding(0, 15, 0, 15);
 
             android.widget.TextView label = new android.widget.TextView(this);
             label.setText(labelText);
             label.setTextSize(14);
-            label.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, -2, 1.2f));
+            label.setTypeface(null, android.graphics.Typeface.BOLD);
+            label.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, -2, 1.0f));
             row.addView(label);
 
             android.widget.EditText amountEdit = new android.widget.EditText(this);
-            amountEdit.setText(String.valueOf(doc.get("amount")));
+            Object amtObj = doc.get("amount");
+            if (amtObj instanceof Double) {
+                amountEdit.setText(String.valueOf(((Double) amtObj).intValue()));
+            } else {
+                amountEdit.setText(String.valueOf(amtObj));
+            }
             amountEdit.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-            amountEdit.setLayoutParams(new android.widget.LinearLayout.LayoutParams(250, -2));
+            amountEdit.setLayoutParams(new android.widget.LinearLayout.LayoutParams(200, -2));
             row.addView(amountEdit);
             amountFields.put(doc.getId(), amountEdit);
 
@@ -731,11 +844,30 @@ public class MainActivity extends AppCompatActivity {
             btnDel.setBackgroundColor(android.graphics.Color.TRANSPARENT);
             btnDel.setOnClickListener(v -> {
                 docsToDelete.add(doc.getId());
-                row.setVisibility(android.view.View.GONE);
+                itemContainer.setVisibility(android.view.View.GONE);
             });
             row.addView(btnDel);
 
-            mainLayout.addView(row);
+            itemContainer.addView(row);
+
+            android.widget.EditText commentEdit = new android.widget.EditText(this);
+            commentEdit.setText(doc.getString("comments"));
+            commentEdit.setHint("Add Comment...");
+            commentEdit.setTextSize(13);
+            commentEdit.setFilters(new android.text.InputFilter[] {new android.text.InputFilter.LengthFilter(16)});
+            android.widget.LinearLayout.LayoutParams commentLp = new android.widget.LinearLayout.LayoutParams(-1, -2);
+            commentLp.setMargins(20, 0, 20, 0);
+            commentEdit.setLayoutParams(commentLp);
+            itemContainer.addView(commentEdit);
+            commentFields.put(doc.getId(), commentEdit);
+
+            mainLayout.addView(itemContainer);
+
+            // Divider
+            android.view.View divider = new android.view.View(this);
+            divider.setLayoutParams(new android.widget.LinearLayout.LayoutParams(-1, 1));
+            divider.setBackgroundColor(android.graphics.Color.LTGRAY);
+            mainLayout.addView(divider);
         }
 
         new androidx.appcompat.app.AlertDialog.Builder(this)
@@ -753,8 +885,10 @@ public class MainActivity extends AppCompatActivity {
                 for (Map.Entry<String, EditText> entry : amountFields.entrySet()) {
                     if (!docsToDelete.contains(entry.getKey())) {
                         try {
-                            double newAmt = Double.parseDouble(entry.getKey().startsWith("temp") ? "0" : entry.getValue().getText().toString());
-                            batch.update(maintenanceManager.getDb().collection(collection).document(entry.getKey()), "amount", newAmt);
+                            int newAmt = Integer.parseInt(entry.getValue().getText().toString());
+                            String newComment = commentFields.get(entry.getKey()).getText().toString();
+                            batch.update(maintenanceManager.getDb().collection(collection).document(entry.getKey()), 
+                                "amount", newAmt, "comments", newComment);
                         } catch (Exception e) {}
                     }
                 }
@@ -773,8 +907,17 @@ public class MainActivity extends AppCompatActivity {
         // 1. Fetch Opening Balances
         maintenanceManager.getDb().collection("opening_balances").document(balDocId).get()
             .addOnSuccessListener(balDoc -> {
-                double openingCash = balDoc.exists() ? (balDoc.getDouble("cash") != null ? balDoc.getDouble("cash") : 0) : 0;
-                double openingGpay = balDoc.exists() ? (balDoc.getDouble("account") != null ? balDoc.getDouble("account") : 0) : 0;
+                int openingCash = 0;
+                int openingGpay = 0;
+                if (balDoc.exists()) {
+                    Double cash = balDoc.getDouble("cash");
+                    Double acc = balDoc.getDouble("account");
+                    if (cash != null) openingCash = cash.intValue();
+                    if (acc != null) openingGpay = acc.intValue();
+                }
+
+                final int finalOpeningCash = openingCash;
+                final int finalOpeningGpay = openingGpay;
 
                 // 2. Fetch Payments
                 maintenanceManager.getDb().collection("payments")
@@ -783,59 +926,66 @@ public class MainActivity extends AppCompatActivity {
                     .get()
                     .addOnSuccessListener(pSnapshot -> {
                         // 3. Fetch Expenses
-                        maintenanceManager.getDb().collection("expenses")
+                        maintenanceManager.getDb().collection("e" +
+                                        "xpenses")
                             .whereEqualTo("month", selectedMonth)
                             .whereEqualTo("year", currentYear)
                             .get()
                             .addOnSuccessListener(eSnapshot -> {
-                                StringBuilder csv = new StringBuilder("TYPE,ID/FLAT,MONTH,AMOUNT,PAY_TYPE,DATE\n");
+                                StringBuilder csv = new StringBuilder("TYPE,ID/FLAT,MONTH,AMOUNT,PAY_TYPE,DATE,COMMENTS\n");
                                 
                                 // Add Opening Balance Rows
-                                csv.append("OPENING,Cash,,").append(openingCash).append(",Cash,\n");
-                                csv.append("OPENING,Account,,").append(openingGpay).append(",Gpay,\n");
-                                csv.append(",,,,,\n"); // Empty row separator
+                                csv.append("OPENING,Cash,,").append(finalOpeningCash).append(",Cash,,\n");
+                                csv.append("OPENING,Account,,").append(finalOpeningGpay).append(",Gpay,,\n");
+                                csv.append(",,,,,,\n"); // Empty row separator
 
-                                double totalCashPaid = 0;
-                                double totalGpayPaid = 0;
-                                double totalCashExp = 0;
-                                double totalGpayExp = 0;
+                                int totalCashPaid = 0;
+                                int totalGpayPaid = 0;
+                                int totalCashExp = 0;
+                                int totalGpayExp = 0;
 
                                 // Add Payments
                                 for (com.google.firebase.firestore.DocumentSnapshot doc : pSnapshot.getDocuments()) {
-                                    Double amt = doc.getDouble("amount");
+                                    Double amtObj = doc.getDouble("amount");
+                                    int amt = amtObj != null ? amtObj.intValue() : 0;
                                     String type = doc.getString("paymentType");
-                                    if (amt != null) {
-                                        if ("Gpay".equals(type)) totalGpayPaid += amt; else totalCashPaid += amt;
-                                    }
+                                    String comm = doc.getString("comments") != null ? doc.getString("comments") : "";
+                                    
+                                    if ("Gpay".equals(type)) totalGpayPaid += amt; else totalCashPaid += amt;
+                                    
                                     csv.append("PAYMENT,").append(doc.getString("flatNo")).append(",")
                                        .append(doc.getString("month")).append(",")
                                        .append(amt).append(",")
                                        .append(type != null ? type : "Cash").append(",")
-                                       .append(doc.get("date")).append("\n");
+                                       .append(doc.get("date")).append(",")
+                                       .append(comm).append("\n");
                                 }
 
                                 // Add Expenses
                                 for (com.google.firebase.firestore.DocumentSnapshot doc : eSnapshot.getDocuments()) {
-                                    Double amt = doc.getDouble("amount");
+                                    Double amtObj = doc.getDouble("amount");
+                                    int amt = amtObj != null ? amtObj.intValue() : 0;
                                     String type = doc.getString("paymentType");
-                                    if (amt != null) {
-                                        if ("Gpay".equals(type)) totalGpayExp += amt; else totalCashExp += amt;
-                                    }
+                                    String comm = doc.getString("comments") != null ? doc.getString("comments") : "";
+                                    
+                                    if ("Gpay".equals(type)) totalGpayExp += amt; else totalCashExp += amt;
+                                    
                                     csv.append("EXPENSE,").append(doc.getString("type")).append(",")
                                        .append(doc.getString("month")).append(",")
                                        .append(amt).append(",")
                                        .append(type != null ? type : "Cash").append(",")
-                                       .append(doc.get("date")).append("\n");
+                                       .append(doc.get("date")).append(",")
+                                       .append(comm).append("\n");
                                 }
 
                                 // Calculate Closings
-                                double netCash = openingCash + totalCashPaid - totalCashExp;
-                                double netGpay = openingGpay + totalGpayPaid - totalGpayExp;
+                                int netCash = finalOpeningCash + totalCashPaid - totalCashExp;
+                                int netGpay = finalOpeningGpay + totalGpayPaid - totalGpayExp;
 
-                                csv.append(",,,,,\n"); // Separator
-                                csv.append("CLOSING,Cash,,").append(netCash).append(",Cash,\n");
-                                csv.append("CLOSING,Account,,").append(netGpay).append(",Gpay,\n");
-                                csv.append("TOTAL,Net,,").append(netCash + netGpay).append(",,\n");
+                                csv.append(",,,,,,\n"); // Separator
+                                csv.append("CLOSING,Cash,,").append(netCash).append(",Cash,,\n");
+                                csv.append("CLOSING,Account,,").append(netGpay).append(",Gpay,,\n");
+                                csv.append("TOTAL,Net,,").append(netCash + netGpay).append(",,,\n");
                                 
                                 maintenanceManager.shareCsv(this, "Accounts_" + selectedMonth + ".csv", csv.toString());
                             });
@@ -882,7 +1032,6 @@ public class MainActivity extends AppCompatActivity {
                 .setPositiveButton("Close", null)
                 .setNeutralButton("Copy & Share", null)
                 .setNegativeButton("Edit Payments", null)
-                .setPositiveButton("Cleanup Duplicates", (d, w) -> cleanupDuplicates(months[dialogMonthSpinner.getSelectedItemPosition()]))
                 .create();
 
         dialogMonthSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
@@ -895,6 +1044,10 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onNothingSelected(android.widget.AdapterView<?> parent) {}
         });
+
+        // Add a long click or another way to cleanup duplicates if needed, 
+        // or just add it as another button in the UI.
+        // For now, let's just make it a dedicated button in the layout or keep it simple.
 
         dialog.show();
 
@@ -965,20 +1118,29 @@ public class MainActivity extends AppCompatActivity {
 
         maintenanceManager.getDb().collection("opening_balances").document(balDocId).get()
             .addOnSuccessListener(balDoc -> {
-                double openingCash = balDoc.exists() ? (balDoc.getDouble("cash") != null ? balDoc.getDouble("cash") : 0) : 0;
-                double openingGpay = balDoc.exists() ? (balDoc.getDouble("account") != null ? balDoc.getDouble("account") : 0) : 0;
+                int openingCash = 0;
+                int openingGpay = 0;
+                if (balDoc.exists()) {
+                    Double cash = balDoc.getDouble("cash");
+                    Double acc = balDoc.getDouble("account");
+                    if (cash != null) openingCash = cash.intValue();
+                    if (acc != null) openingGpay = acc.intValue();
+                }
+
+                final int finalOpeningCash = openingCash;
+                final int finalOpeningGpay = openingGpay;
 
                 maintenanceManager.getDb().collection("payments")
                 .whereEqualTo("month", month)
                 .whereEqualTo("year", currentYear)
                 .get()
                 .addOnSuccessListener(querySnapshot -> {
-                    double totalPaidSumStatus = 0;
-                    double totalCashPaid = 0;
-                    double totalGpayPaid = 0;
+                    int totalPaidSumStatus = 0;
+                    int totalCashPaid = 0;
+                    int totalGpayPaid = 0;
                     
                     // Map to track sum and type per flat
-                    java.util.Map<String, Double> flatAmounts = new java.util.HashMap<>();
+                    java.util.Map<String, Integer> flatAmounts = new java.util.HashMap<>();
                     java.util.Map<String, String> flatTypes = new java.util.HashMap<>();
                     java.util.Map<String, Integer> flatEntryCount = new java.util.HashMap<>();
 
@@ -989,17 +1151,19 @@ public class MainActivity extends AppCompatActivity {
                         String type = doc.getString("paymentType");
                         if (type == null) type = "Cash";
                         
-                        Double amt = 0.0;
+                        int amt = 0;
                         Object amtObj = doc.get("amount");
-                        if (amtObj instanceof Number) amt = ((Number) amtObj).doubleValue();
+                        if (amtObj instanceof Number) amt = ((Number) amtObj).intValue();
 
                         totalPaidSumStatus += amt;
                         if ("Gpay".equalsIgnoreCase(type)) totalGpayPaid += amt;
                         else totalCashPaid += amt;
 
-                        flatAmounts.put(f, flatAmounts.getOrDefault(f, 0.0) + amt);
+                        Integer existingAmt = flatAmounts.get(f);
+                        flatAmounts.put(f, (existingAmt != null ? existingAmt : 0) + amt);
                         flatTypes.put(f, type); // Last entry's type
-                        flatEntryCount.put(f, flatEntryCount.getOrDefault(f, 0) + 1);
+                        Integer existingCount = flatEntryCount.get(f);
+                        flatEntryCount.put(f, (existingCount != null ? existingCount : 0) + 1);
                     }
 
                     java.util.List<String> paidInList = new java.util.ArrayList<>();
@@ -1007,9 +1171,11 @@ public class MainActivity extends AppCompatActivity {
 
                     for (String f : flats) {
                         if (flatAmounts.containsKey(f)) {
-                            String entry = f + " (₹" + Math.round(flatAmounts.get(f)) + " " + flatTypes.get(f) + ")";
-                            if (flatEntryCount.get(f) > 1) {
-                                entry += " [DUP x" + flatEntryCount.get(f) + "]";
+                            Integer amt = flatAmounts.get(f);
+                            String entry = f + " (₹" + (amt != null ? amt : 0) + " " + flatTypes.get(f) + ")";
+                            Integer count = flatEntryCount.get(f);
+                            if (count != null && count > 1) {
+                                entry += " [DUP x" + count + "]";
                             }
                             paidInList.add(entry);
                         } else {
@@ -1027,43 +1193,53 @@ public class MainActivity extends AppCompatActivity {
                         pending.append(pendingInList.get(i)).append(i == pendingInList.size() - 1 ? "" : ", ");
                     }
 
-                    final double finalTotalPaid = totalPaidSumStatus;
-                    final double finalCashPaid = totalCashPaid;
-                    final double finalGpayPaid = totalGpayPaid;
+                    final int finalTotalPaid = totalPaidSumStatus;
+                    final int finalCashPaid = totalCashPaid;
+                    final int finalGpayPaid = totalGpayPaid;
 
                     maintenanceManager.getDb().collection("expenses")
                             .whereEqualTo("month", month)
                             .whereEqualTo("year", currentYear)
                             .get()
                             .addOnSuccessListener(eSnapshot -> {
-                                double totalExp = 0;
-                                double totalCashExp = 0;
-                                double totalGpayExp = 0;
+                                int totalExp = 0;
+                                int totalCashExp = 0;
+                                int totalGpayExp = 0;
+                                StringBuilder expDetails = new StringBuilder("\n\nExpenses:\n");
                                 for (com.google.firebase.firestore.DocumentSnapshot doc : eSnapshot.getDocuments()) {
-                                    Double amt = null;
+                                    int amt = 0;
                                     Object amtObj = doc.get("amount");
-                                    if (amtObj instanceof Number) amt = ((Number) amtObj).doubleValue();
+                                    if (amtObj instanceof Number) amt = ((Number) amtObj).intValue();
 
-                                    if (amt != null) {
-                                        totalExp += amt;
-                                        String type = doc.getString("paymentType");
-                                        if ("Gpay".equalsIgnoreCase(type)) totalGpayExp += amt;
-                                        else totalCashExp += amt;
+                                    totalExp += amt;
+                                    String type = doc.getString("type");
+                                    String pType = doc.getString("paymentType");
+                                    if (pType == null) pType = "Cash";
+                                    String comm = doc.getString("comments");
+
+                                    if ("Gpay".equalsIgnoreCase(pType)) totalGpayExp += amt;
+                                    else totalCashExp += amt;
+
+                                    expDetails.append("- ").append(type).append(": ₹").append(amt).append(" (").append(pType).append(")");
+                                    if (comm != null && !comm.isEmpty()) {
+                                        expDetails.append(" [").append(comm).append("]");
                                     }
+                                    expDetails.append("\n");
                                 }
 
-                                double netCash = openingCash + finalCashPaid - totalCashExp;
-                                double netGpay = openingGpay + finalGpayPaid - totalGpayExp;
+                                int netCash = finalOpeningCash + finalCashPaid - totalCashExp;
+                                int netGpay = finalOpeningGpay + finalGpayPaid - totalGpayExp;
 
-                                String statusText = "Summary for " + month + ":\n" +
-                                        "Opening: Cash ₹" + Math.round(openingCash) + ", Acc ₹" + Math.round(openingGpay) + "\n" +
-                                        "Collected: ₹" + Math.round(finalTotalPaid) + " (Cash: " + Math.round(finalCashPaid) + ", Gpay: " + Math.round(finalGpayPaid) + ")\n" +
-                                        "Expenses:  ₹" + Math.round(totalExp) + " (Cash: " + Math.round(totalCashExp) + ", Gpay: " + Math.round(totalGpayExp) + ")\n" +
+                                String statusText = "Summary for " + month + " " + currentYear + ":\n" +
+                                        "Opening: Cash ₹" + finalOpeningCash + ", Acc ₹" + finalOpeningGpay + "\n" +
+                                        "Collected: ₹" + finalTotalPaid + " (Cash: " + finalCashPaid + ", Gpay: " + finalGpayPaid + ")\n" +
+                                        "Expenses:  ₹" + totalExp + " (Cash: " + totalCashExp + ", Gpay: " + totalGpayExp + ")\n" +
                                         "---------------------------\n" +
-                                        "CLOSING: Cash ₹" + Math.round(netCash) + ", Acc ₹" + Math.round(netGpay) + "\n" +
-                                        "TOTAL BALANCE: ₹" + Math.round(netCash + netGpay) + "\n\n" +
-                                        paidStr.toString() + "\n\n" +
-                                        pending.toString();
+                                        "CLOSING: Cash ₹" + netCash + ", Acc ₹" + netGpay + "\n" +
+                                        "TOTAL BALANCE: ₹" + (netCash + netGpay) + "\n\n" +
+                                        paidStr.toString() + "\n" +
+                                        pending.toString() +
+                                        expDetails.toString();
 
                                 statusView.setText(statusText);
                             });
@@ -1079,17 +1255,19 @@ public class MainActivity extends AppCompatActivity {
 
         String amountStr = expAmount.getText().toString();
         String selectedMonth = monthSpinner.getSelectedItem().toString();
+        String comments = expComments.getText().toString();
 
         if (amountStr.isEmpty()) return;
 
-        double amount = Double.parseDouble(amountStr);
+        int amount = Integer.parseInt(amountStr);
         int currentYear = currentYearValue;
-        Expense exp = new Expense(type, amount, payType, selectedMonth, currentYear, expenseCalendar.getTime(), "");
+        Expense exp = new Expense(type, amount, payType, selectedMonth, currentYear, expenseCalendar.getTime(), comments);
 
         maintenanceManager.saveExpense(exp)
             .addOnSuccessListener(doc -> {
                 Toast.makeText(this, "Expense Saved!", Toast.LENGTH_SHORT).show();
                 expAmount.setText("");
+                expComments.setText("");
             })
             .addOnFailureListener(e -> {
                 Toast.makeText(this, "Failed to save expense: " + e.getMessage(), Toast.LENGTH_SHORT).show();
